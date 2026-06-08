@@ -90,7 +90,7 @@ app.use('/api/exits', crudRouter('exits',
 
 // ── Serve React build in production ──────────────────────
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
-if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
+if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 } else {
