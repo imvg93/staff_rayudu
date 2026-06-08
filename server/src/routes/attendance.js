@@ -42,30 +42,36 @@ router.post('/', (req, res) => {
 
 // Bulk upsert (mark whole grid at once)
 router.post('/bulk', (req, res) => {
-  const { date, marks } = req.body; // marks: [{employee_id,status,check_in,is_late,remarks}]
+  const { date, marks } = req.body;
   if (!date || !Array.isArray(marks)) return res.status(400).json({ error: 'date and marks[] required' });
-  const stmt = db.prepare(`
-    INSERT INTO attendance (employee_id,date,status,check_in,is_late,remarks)
-    VALUES (?,?,?,?,?,?)
-    ON CONFLICT(employee_id,date) DO UPDATE SET
-      status=excluded.status, check_in=excluded.check_in,
-      is_late=excluded.is_late, remarks=excluded.remarks
-  `);
-  const month = date.slice(0, 7);
-  const tx = db.transaction((items) => {
-    for (const m of items) {
-      if (!m.status) continue;
-      stmt.run(m.employee_id, date, m.status, m.check_in || null, m.is_late ? 1 : 0, m.remarks || null);
-      autoSync(m.employee_id, month);
-    }
-  });
-  tx(marks);
-  res.json({ ok: true, count: marks.length });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO attendance (employee_id,date,status,check_in,is_late,remarks)
+      VALUES (?,?,?,?,?,?)
+      ON CONFLICT(employee_id,date) DO UPDATE SET
+        status=excluded.status, check_in=excluded.check_in,
+        is_late=excluded.is_late, remarks=excluded.remarks
+    `);
+    const month = date.slice(0, 7);
+    const tx = db.transaction((items) => {
+      for (const m of items) {
+        if (!m.status) continue;
+        stmt.run(m.employee_id, date, m.status, m.check_in || null, m.is_late ? 1 : 0, m.remarks || null);
+        autoSync(m.employee_id, month);
+      }
+    });
+    tx(marks);
+    res.json({ ok: true, count: marks.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save attendance: ' + err.message });
+  }
 });
 
 // Monthly report: per-employee counts for a YYYY-MM
 router.get('/report/:month', (req, res) => {
   const month = req.params.month;
+  if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'month must be YYYY-MM' });
   const rows = db.prepare(`
     SELECT e.id AS employee_id, e.emp_code, e.name, e.department, e.monthly_allowed_holidays,
       SUM(CASE WHEN a.status='present' THEN 1 ELSE 0 END) AS present,

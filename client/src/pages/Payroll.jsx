@@ -3,6 +3,10 @@ import api, { rupee, fmtDate } from '../api.js';
 import { Spinner, EmployeeCell, EmployeeSelect, Modal } from '../components/ui.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { SlipView } from './SalarySlip.jsx';
+import {
+  Printer, CheckCheck, Lock, LockOpen, Pencil, Check,
+  FileText, Settings, Briefcase, CircleDollarSign, TrendingDown, Landmark,
+} from 'lucide-react';
 
 function prevMonth() {
   const d = new Date(); d.setMonth(d.getMonth() - 1);
@@ -10,7 +14,7 @@ function prevMonth() {
 }
 
 const STATUS_COLORS = { processed: '#6b7a72', approved: '#2e7d32', locked: '#1a1a2e' };
-const STATUS_LABELS = { processed: 'Draft', approved: '✓ Approved', locked: '🔒 Locked' };
+const STATUS_LABELS = { processed: 'Draft', approved: 'Approved', locked: 'Locked' };
 
 export default function Payroll() {
   const [tab, setTab] = useState('payroll');
@@ -113,16 +117,16 @@ function MonthlyPayroll() {
         <div className="spacer" />
         {rows && rows.length > 0 && (
           <>
-            <button className="btn ghost sm" onClick={() => window.print()}>🖨 Print Report</button>
+            <button className="btn ghost sm" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print</button>
             {canApprove && (
               <>
-                <button className="btn sm gray" onClick={approveAll} disabled={busy}>✓ Approve All</button>
-                <button className="btn sm" style={{ background: '#1a1a2e' }} onClick={lockAll} disabled={busy}>🔒 Lock Month</button>
+                <button className="btn sm gray" onClick={approveAll} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckCheck size={13} strokeWidth={1.8} /> Approve All</button>
+                <button className="btn sm" style={{ background: '#1a1a2e', display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={lockAll} disabled={busy}><Lock size={13} strokeWidth={1.8} /> Lock Month</button>
               </>
             )}
           </>
         )}
-        <button className="btn" onClick={generate} disabled={busy}>{busy ? 'Processing…' : '⚙ Process Payroll'}</button>
+        <button className="btn" onClick={generate} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{busy ? 'Processing…' : <><Settings size={13} strokeWidth={1.8} /> Process Payroll</>}</button>
       </div>
 
       {!rows ? <Spinner /> : rows.length === 0 ? (
@@ -130,10 +134,10 @@ function MonthlyPayroll() {
       ) : (
         <>
           <div className="grid stats" style={{ marginBottom: 16 }}>
-            <div className="stat-card"><div className="ic">💼</div><div><div className="v">{rows.length}</div><div className="l">Employees</div></div></div>
-            <div className="stat-card"><div className="ic">💰</div><div><div className="v">{rupee(totals.net)}</div><div className="l">Total Net Payout</div></div></div>
-            <div className="stat-card"><div className="ic">📉</div><div><div className="v">{rupee(totals.absenceDed)}</div><div className="l">Absence Deducted</div></div></div>
-            <div className="stat-card"><div className="ic">🏦</div><div><div className="v">{rupee(totals.adv)}</div><div className="l">Advance Recovered</div></div></div>
+            <div className="stat-card"><div className="ic"><Briefcase size={16} strokeWidth={1.8} /></div><div><div className="v">{rows.length}</div><div className="l">Employees</div></div></div>
+            <div className="stat-card"><div className="ic"><CircleDollarSign size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(totals.net)}</div><div className="l">Total Net Payout</div></div></div>
+            <div className="stat-card"><div className="ic"><TrendingDown size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(totals.absenceDed)}</div><div className="l">Absence Deducted</div></div></div>
+            <div className="stat-card"><div className="ic"><Landmark size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(totals.adv)}</div><div className="l">Advance Recovered</div></div></div>
           </div>
           <div className="panel">
             <div className="table-wrap">
@@ -177,21 +181,21 @@ function MonthlyPayroll() {
                       </td>
                       <td>
                         <div className="btn-row" style={{ gap: 4 }}>
-                          <button className="btn sm ghost" onClick={() => openSlip(r)}>📄</button>
+                          <button className="btn sm ghost" onClick={() => openSlip(r)} title="View Slip" style={{ display: 'inline-flex', alignItems: 'center' }}><FileText size={13} strokeWidth={1.8} /></button>
                           {canApprove && r.status !== 'locked' && (
-                            <button className="btn sm gray" onClick={() => openAdjust(r)} title="Adjust">✏️</button>
+                            <button className="btn sm gray" onClick={() => openAdjust(r)} title="Adjust" style={{ display: 'inline-flex', alignItems: 'center' }}><Pencil size={12} strokeWidth={1.8} /></button>
                           )}
                           {canApprove && r.status === 'processed' && (
-                            <button className="btn sm" style={{ background: '#2e7d32', fontSize: 11, padding: '3px 8px' }}
-                              onClick={() => approve(r)}>✓</button>
+                            <button className="btn sm" style={{ background: '#2e7d32', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
+                              onClick={() => approve(r)} title="Approve"><Check size={12} strokeWidth={2} /></button>
                           )}
                           {canApprove && r.status === 'approved' && (
-                            <button className="btn sm" style={{ background: '#1a1a2e', fontSize: 11, padding: '3px 8px' }}
-                              onClick={() => lock(r)}>🔒</button>
+                            <button className="btn sm" style={{ background: '#1a1a2e', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
+                              onClick={() => lock(r)} title="Lock"><Lock size={12} strokeWidth={2} /></button>
                           )}
                           {canApprove && r.status === 'locked' && (
-                            <button className="btn sm" style={{ background: '#c0392b', fontSize: 11, padding: '3px 8px' }}
-                              title="Unlock — revert to Approved" onClick={() => unlock(r)}>🔓</button>
+                            <button className="btn sm" style={{ background: '#c0392b', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
+                              title="Unlock — revert to Approved" onClick={() => unlock(r)}><LockOpen size={12} strokeWidth={2} /></button>
                           )}
                         </div>
                       </td>
@@ -220,7 +224,7 @@ function MonthlyPayroll() {
           footer={
             <>
               <button className="btn gray" onClick={() => setSlipData(null)}>Close</button>
-              <button className="btn" onClick={() => window.print()}>🖨 Print</button>
+              <button className="btn" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print</button>
             </>
           }>
           <SlipView slip={slipData} />

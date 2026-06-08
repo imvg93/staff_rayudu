@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, Legend } from 'recharts';
 import api, { today, thisMonth } from '../api.js';
 import { useApi, Spinner, Badge, EmployeeCell } from '../components/ui.jsx';
+import { Printer, Check } from 'lucide-react';
 
 const STATUSES = [
   { v: 'present',      label: 'P',   cls: 'present',  title: 'Present' },
@@ -66,7 +67,7 @@ function DailyGrid() {
         <label style={{ fontSize: 13, color: '#6b7a72' }}>Date</label>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <div className="spacer" />
-        {saved && <span style={{ color: '#2e7d32', fontSize: 13 }}>✓ Saved</span>}
+        {saved && <span style={{ color: '#2e7d32', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={2.2} /> Saved</span>}
         <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Attendance'}</button>
       </div>
       <div className="panel">
@@ -134,7 +135,7 @@ function MonthlyReport() {
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         <div className="spacer" />
         {rows && rows.length > 0 && (
-          <button className="btn ghost sm" onClick={() => window.print()}>🖨 Print Report</button>
+          <button className="btn ghost sm" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print Report</button>
         )}
       </div>
       {!rows ? <Spinner /> : (

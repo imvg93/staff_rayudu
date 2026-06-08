@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { rupee } from '../api.js';
 import { Spinner, EmployeeSelect } from '../components/ui.jsx';
+import { Printer, Users, CircleDollarSign, TrendingDown, Landmark } from 'lucide-react';
 
 function prevMonth() {
   const d = new Date(); d.setMonth(d.getMonth() - 1);
@@ -36,7 +37,7 @@ export default function SalaryReport() {
       <div className="page-head no-print">
         <div><h1>Salary Report</h1><p>Full printable monthly salary report with deduction breakdown</p></div>
         {rows && rows.length > 0 && (
-          <button className="btn" onClick={() => window.print()}>🖨 Print Report</button>
+          <button className="btn" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print Report</button>
         )}
       </div>
 
@@ -61,10 +62,10 @@ export default function SalaryReport() {
 
           {/* Summary stats */}
           <div className="grid stats no-print" style={{ marginBottom: 16 }}>
-            <div className="stat-card"><div className="ic">👥</div><div><div className="v">{visible.length}</div><div className="l">Employees</div></div></div>
-            <div className="stat-card"><div className="ic">💰</div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.net_salary || 0), 0))}</div><div className="l">Total Payout</div></div></div>
-            <div className="stat-card"><div className="ic">📉</div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.absence_deduction || 0), 0))}</div><div className="l">Absence Deducted</div></div></div>
-            <div className="stat-card"><div className="ic">🏦</div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.advance_deduction || 0), 0))}</div><div className="l">Advance Recovered</div></div></div>
+            <div className="stat-card"><div className="ic"><Users size={16} strokeWidth={1.8} /></div><div><div className="v">{visible.length}</div><div className="l">Employees</div></div></div>
+            <div className="stat-card"><div className="ic"><CircleDollarSign size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.net_salary || 0), 0))}</div><div className="l">Total Payout</div></div></div>
+            <div className="stat-card"><div className="ic"><TrendingDown size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.absence_deduction || 0), 0))}</div><div className="l">Absence Deducted</div></div></div>
+            <div className="stat-card"><div className="ic"><Landmark size={16} strokeWidth={1.8} /></div><div><div className="v">{rupee(visible.reduce((s, r) => s + (r.advance_deduction || 0), 0))}</div><div className="l">Advance Recovered</div></div></div>
           </div>
 
           {/* Full table */}
@@ -117,7 +118,7 @@ export default function SalaryReport() {
                       <td style={{ textAlign: 'center' }}>
                         <span style={{ fontSize: 11, fontWeight: 600,
                           color: r.status === 'locked' ? '#1a1a2e' : r.status === 'approved' ? '#2e7d32' : '#6b7a72' }}>
-                          {r.status === 'locked' ? '🔒 Locked' : r.status === 'approved' ? '✓ Approved' : 'Draft'}
+                          {r.status === 'locked' ? 'Locked' : r.status === 'approved' ? 'Approved' : 'Draft'}
                         </span>
                         {r.approved_by && <div style={{ fontSize: 10, color: '#6b7a72' }}>{r.approved_by}</div>}
                       </td>

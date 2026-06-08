@@ -177,8 +177,22 @@ CREATE TABLE IF NOT EXISTS promotions (
 );
 `;
 
+const INDEXES = `
+CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON attendance(employee_id, date);
+CREATE INDEX IF NOT EXISTS idx_attendance_date           ON attendance(date);
+CREATE INDEX IF NOT EXISTS idx_leaves_employee_status    ON leaves(employee_id, status);
+CREATE INDEX IF NOT EXISTS idx_leaves_dates              ON leaves(from_date, to_date);
+CREATE INDEX IF NOT EXISTS idx_payroll_employee_month    ON payroll(employee_id, month);
+CREATE INDEX IF NOT EXISTS idx_payroll_month_status      ON payroll(month, status);
+CREATE INDEX IF NOT EXISTS idx_advances_employee         ON advances(employee_id);
+CREATE INDEX IF NOT EXISTS idx_penalties_employee_date   ON penalties(employee_id, date);
+CREATE INDEX IF NOT EXISTS idx_expenses_date             ON expenses(date);
+CREATE INDEX IF NOT EXISTS idx_employees_status          ON employees(status);
+`;
+
 export function initSchema() {
   db.exec(SCHEMA);
+  db.exec(INDEXES);
 }
 
 initSchema();

@@ -3,11 +3,28 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api, { rupee, fmtDate } from '../api.js';
 import { useApi, Spinner } from '../components/ui.jsx';
 
-const DOT = {
-  joining: '#2e7d32', leave: '#2c6e9b', advance: '#bc6c25', penalty: '#c0392b',
-  warning: '#c0392b', note: '#c8860d', salary: '#3a5a40', exit: '#6b7a72',
-  promotion: '#b08d57',
+const EVENT_META = {
+  joining:   { color: '#059669', bg: '#F0FDF4', label: 'Joining',   icon: '🏁' },
+  leave:     { color: '#2563EB', bg: '#EFF6FF', label: 'Leave',     icon: '🌴' },
+  advance:   { color: '#D97706', bg: '#FFFBEB', label: 'Advance',   icon: '💰' },
+  penalty:   { color: '#DC2626', bg: '#FEF2F2', label: 'Penalty',   icon: '⚠️' },
+  warning:   { color: '#DC2626', bg: '#FEF2F2', label: 'Warning',   icon: '🚨' },
+  note:      { color: '#7C3AED', bg: '#F5F3FF', label: 'Note',      icon: '📝' },
+  salary:    { color: '#0891B2', bg: '#ECFEFF', label: 'Salary',    icon: '💳' },
+  promotion: { color: '#92712A', bg: '#FEF9C3', label: 'Promotion', icon: '🏆' },
+  exit:      { color: '#475569', bg: '#F8FAFC', label: 'Exit',      icon: '🚪' },
 };
+
+const WHAT_IT_TRACKS = [
+  { type: 'joining',   desc: 'Joining date, designation & department' },
+  { type: 'leave',     desc: 'All leave requests — approved, pending, rejected' },
+  { type: 'advance',   desc: 'Salary advances — amount, monthly deduction & balance' },
+  { type: 'penalty',   desc: 'Fines or deductions with reason' },
+  { type: 'note',      desc: 'Appreciations, warnings & performance notes' },
+  { type: 'salary',    desc: 'Every processed payroll month' },
+  { type: 'promotion', desc: 'Designation changes with salary before & after' },
+  { type: 'exit',      desc: 'Exit date, reason & settlement amount' },
+];
 
 export default function Timeline() {
   const { id } = useParams();
@@ -15,75 +32,246 @@ export default function Timeline() {
   const employees = useApi('/employees');
   const [selected, setSelected] = useState(id || '');
   const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => { if (id) setSelected(id); }, [id]);
   useEffect(() => {
     if (!selected) { setData(null); return; }
     setData(null);
-    api.get(`/timeline/${selected}`).then((r) => setData(r.data));
+    setLoading(true);
+    api.get(`/timeline/${selected}`)
+      .then((r) => setData(r.data))
+      .finally(() => setLoading(false));
   }, [selected]);
+
+  const handleSelect = (val) => {
+    setSelected(val);
+    if (val) nav(`/timeline/${val}`); else nav('/timeline');
+  };
 
   return (
     <div>
       <div className="page-head">
-        <div><h1>Employee Timeline</h1><p>Complete journey from joining to exit on one screen</p></div>
+        <div>
+          <h1>Employee Timeline</h1>
+          <p>Complete journey of a staff member — from joining to today</p>
+        </div>
       </div>
 
-      <div className="toolbar">
-        <label style={{ fontSize: 13, color: '#6b7a72' }}>Employee</label>
-        <select value={selected} onChange={(e) => { setSelected(e.target.value); nav(`/timeline/${e.target.value}`); }}>
-          <option value="">— Select employee —</option>
-          {(employees.data || []).map((e) => <option key={e.id} value={e.id}>{e.emp_code} · {e.name}</option>)}
-        </select>
+      {/* Employee selector */}
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: '#64748B', fontWeight: 500, flexShrink: 0 }}>Select Staff Member</span>
+          <select
+            value={selected}
+            onChange={(e) => handleSelect(e.target.value)}
+            style={{ flex: 1, minWidth: 220, maxWidth: 380, height: 38, borderRadius: 8, border: '1px solid #E5E7EB', padding: '0 12px', fontSize: 13, color: '#0F172A', background: '#fff', cursor: 'pointer' }}
+          >
+            <option value="">— Choose an employee —</option>
+            {(employees.data || []).map((e) => (
+              <option key={e.id} value={e.id}>{e.emp_code} · {e.name} · {e.department}</option>
+            ))}
+          </select>
+          {selected && data && (
+            <span style={{ fontSize: 12, color: '#94A3B8' }}>
+              {data.events.length} event{data.events.length !== 1 ? 's' : ''} recorded
+            </span>
+          )}
+        </div>
       </div>
 
-      {!selected ? <div className="panel"><div className="empty">Select an employee to view their timeline.</div></div>
-        : !data ? <Spinner /> : (
-          <div className="two-col">
-            <div className="panel panel-pad">
-              <h3 style={{ marginTop: 0 }}>Activity History</h3>
-              {data.events.length === 0 ? <div className="empty">No events.</div> : (
-                <div className="timeline">
-                  {data.events.map((ev, i) => (
-                    <div className="tl-item" key={i}>
-                      <span className="dot" style={{ background: DOT[ev.type] || '#888' }} />
-                      <div className="d">{fmtDate(ev.date)}</div>
-                      <div className="t">{ev.title}</div>
-                      <div className="det">{ev.detail}</div>
-                    </div>
-                  ))}
+      {/* Empty state — explain the page */}
+      {!selected && (
+        <div>
+          {/* What this page does */}
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div style={{ padding: '24px 28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg,#0F1F3D,#1B4332)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+                  🪖
                 </div>
-              )}
-            </div>
-
-            <div>
-              <div className="panel panel-pad" style={{ marginBottom: 16, textAlign: 'center' }}>
-                <img className="avatar" style={{ width: 72, height: 72 }} src={data.employee.photo_url} alt="" />
-                <h3 style={{ margin: '10px 0 2px' }}>{data.employee.name}</h3>
-                <div style={{ color: '#6b7a72', fontSize: 13 }}>{data.employee.emp_code} · {data.employee.designation}</div>
-                <div style={{ color: '#6b7a72', fontSize: 13 }}>{data.employee.department}</div>
-                <div style={{ marginTop: 10, fontWeight: 700, color: '#3a5a40' }}>{rupee(data.employee.salary)}/mo</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', letterSpacing: '-.2px' }}>What is this page?</div>
+                  <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>Everything about a staff member in one place</div>
+                </div>
               </div>
-              <div className="panel panel-pad">
-                <h3 style={{ marginTop: 0 }}>Attendance Summary</h3>
-                <Row label="Present" value={data.attendanceSummary.present} color="#2e7d32" />
-                <Row label="Absent" value={data.attendanceSummary.absent} color="#c0392b" />
-                <Row label="Half-day" value={data.attendanceSummary.half_day} />
-                <Row label="Leave" value={data.attendanceSummary.leave} color="#2c6e9b" />
-                <Row label="Late arrivals" value={data.attendanceSummary.late} color="#c8860d" />
+              <p style={{ margin: '0 0 16px', fontSize: 13.5, color: '#475569', lineHeight: 1.7 }}>
+                The <b>Employee Timeline</b> shows the full life story of any staff member —
+                every leave, advance, salary, promotion, penalty and more — sorted from newest to oldest.
+                Use it before processing disputes, reviewing a salary, or checking someone's history.
+              </p>
+
+              {/* Event type grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                {WHAT_IT_TRACKS.map(({ type, desc }) => {
+                  const m = EVENT_META[type];
+                  return (
+                    <div key={type} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '10px 12px', borderRadius: 10,
+                      background: m.bg, border: `1px solid ${m.color}18`,
+                    }}>
+                      <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>{m.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: m.color, marginBottom: 2 }}>{m.label}</div>
+                        <div style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.5 }}>{desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
-        )}
-    </div>
-  );
-}
 
-function Row({ label, value, color }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eef0ee' }}>
-      <span style={{ color: '#6b7a72' }}>{label}</span>
-      <b style={color ? { color } : null}>{value || 0}</b>
+          {/* Quick-access employee cards */}
+          {(employees.data || []).length > 0 && (
+            <div className="panel">
+              <div style={{ padding: '14px 20px 8px', borderBottom: '1px solid #F1F5F9' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Quick Select</span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {(employees.data || []).map((e) => (
+                  <button
+                    key={e.id}
+                    onClick={() => handleSelect(String(e.id))}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '7px 12px', borderRadius: 8,
+                      border: '1px solid #E5E7EB', background: '#F8FAFC',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'background .12s, border-color .12s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#EFF6FF'; e.currentTarget.style.borderColor = '#93C5FD'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F8FAFC'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+                  >
+                    <img
+                      src={e.photo_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(e.name)}`}
+                      alt=""
+                      style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }}
+                    />
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0F172A' }}>{e.name}</div>
+                      <div style={{ fontSize: 10.5, color: '#94A3B8' }}>{e.emp_code} · {e.department}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Loading */}
+      {selected && loading && <div style={{ padding: '60px 0' }}><Spinner /></div>}
+
+      {/* Employee detail */}
+      {selected && data && (
+        <div className="two-col">
+          {/* LEFT — timeline events */}
+          <div className="panel">
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 7, background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>📋</div>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>Activity History</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94A3B8', background: '#F1F5F9', padding: '2px 8px', borderRadius: 20 }}>
+                {data.events.length} events
+              </span>
+            </div>
+
+            <div style={{ padding: '16px 20px' }}>
+              {data.events.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#94A3B8', fontSize: 13 }}>
+                  No events recorded yet
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  {data.events.map((ev, i) => {
+                    const m = EVENT_META[ev.type] || { color: '#64748B', bg: '#F8FAFC', icon: '•' };
+                    return (
+                      <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: 18, position: 'relative' }}>
+                        {/* Vertical line */}
+                        {i < data.events.length - 1 && (
+                          <div style={{ position: 'absolute', left: 15, top: 32, bottom: 0, width: 1, background: '#F1F5F9' }} />
+                        )}
+                        {/* Dot */}
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', background: m.bg, border: `2px solid ${m.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
+                          {m.icon}
+                        </div>
+                        {/* Content */}
+                        <div style={{ flex: 1, paddingTop: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: m.color, background: m.bg, padding: '1px 7px', borderRadius: 20 }}>{m.label}</span>
+                            <span style={{ fontSize: 11, color: '#94A3B8' }}>{fmtDate(ev.date)}</span>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 2 }}>{ev.title}</div>
+                          {ev.detail && <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>{ev.detail}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT — profile + stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Profile card */}
+            <div className="panel">
+              <div style={{ padding: '20px', textAlign: 'center', borderBottom: '1px solid #F1F5F9' }}>
+                <img
+                  src={data.employee.photo_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.employee.name)}`}
+                  alt=""
+                  style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'cover', border: '3px solid #F1F5F9' }}
+                />
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginTop: 10, letterSpacing: '-.2px' }}>{data.employee.name}</div>
+                <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>{data.employee.designation || 'Staff'}</div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: '#F0FDF4', color: '#059669', fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 20 }}>
+                  {data.employee.department}
+                </div>
+              </div>
+              <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { label: 'Employee Code', value: data.employee.emp_code },
+                  { label: 'Monthly Salary', value: rupee(data.employee.salary), bold: true, color: '#7C3AED' },
+                  { label: 'Joined On', value: fmtDate(data.employee.joining_date) },
+                  { label: 'Phone', value: data.employee.phone || '—' },
+                  { label: 'Status', value: data.employee.status === 'active' ? '✅ Active' : '⛔ Inactive' },
+                ].map((r) => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F8FAFC' }}>
+                    <span style={{ fontSize: 12, color: '#94A3B8' }}>{r.label}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: r.bold ? 700 : 500, color: r.color || '#0F172A' }}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Attendance summary */}
+            <div className="panel">
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Attendance Summary</span>
+              </div>
+              <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { label: 'Present',      value: data.attendanceSummary.present,  color: '#059669', bg: '#F0FDF4' },
+                  { label: 'Absent',       value: data.attendanceSummary.absent,   color: '#DC2626', bg: '#FEF2F2' },
+                  { label: 'Half-day',     value: data.attendanceSummary.half_day, color: '#D97706', bg: '#FFFBEB' },
+                  { label: 'On Leave',     value: data.attendanceSummary.leave,    color: '#2563EB', bg: '#EFF6FF' },
+                  { label: 'Late Entries', value: data.attendanceSummary.late,     color: '#7C3AED', bg: '#F5F3FF' },
+                ].map((r) => (
+                  <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12.5, color: '#475569' }}>{r.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: r.color, background: r.bg, padding: '2px 10px', borderRadius: 20, minWidth: 36, textAlign: 'center' }}>
+                      {r.value || 0}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

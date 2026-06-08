@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { rupee, today, thisMonth } from '../api.js';
 import { useApi, Spinner, Badge, EmployeeCell, Modal, Field, EmployeeSelect } from '../components/ui.jsx';
+import { CalendarCheck, Clock, Umbrella, ClipboardList, Users, UserCheck, UserX, Timer } from 'lucide-react';
 
 const QUICK = [
-  { icon: '✅', label: 'Mark Attendance', to: '/attendance' },
-  { icon: '🕑', label: 'Assign Shift', to: '/shifts' },
-  { icon: '🌴', label: 'Approve Leave', to: '/leaves' },
-  { icon: '📝', label: 'Performance Note', to: '/performance' },
-  { icon: '👥', label: 'Staff Records', to: '/staff' },
+  { icon: <CalendarCheck size={18} strokeWidth={1.7} />, label: 'Mark Attendance', to: '/attendance' },
+  { icon: <Clock size={18} strokeWidth={1.7} />, label: 'Assign Shift', to: '/shifts' },
+  { icon: <Umbrella size={18} strokeWidth={1.7} />, label: 'Approve Leave', to: '/leaves' },
+  { icon: <ClipboardList size={18} strokeWidth={1.7} />, label: 'Performance Note', to: '/performance' },
+  { icon: <Users size={18} strokeWidth={1.7} />, label: 'Staff Records', to: '/staff' },
 ];
 
 export default function Supervisor() {
@@ -37,10 +38,10 @@ export default function Supervisor() {
 
       {dash.data && (
         <div className="grid stats" style={{ marginBottom: 18 }}>
-          <div className="stat-card"><div className="ic">👥</div><div><div className="v">{dash.data.totalEmployees}</div><div className="l">On Roll</div></div></div>
-          <div className="stat-card"><div className="ic">✅</div><div><div className="v">{dash.data.present}</div><div className="l">Present Today</div></div></div>
-          <div className="stat-card"><div className="ic">❌</div><div><div className="v">{dash.data.absent}</div><div className="l">Absent Today</div></div></div>
-          <div className="stat-card"><div className="ic">⏳</div><div><div className="v">{dash.data.pendingLeaves}</div><div className="l">Leaves to Approve</div></div></div>
+          <div className="stat-card"><div className="ic"><Users size={16} strokeWidth={1.8} /></div><div><div className="v">{dash.data.totalEmployees}</div><div className="l">On Roll</div></div></div>
+          <div className="stat-card"><div className="ic"><UserCheck size={16} strokeWidth={1.8} /></div><div><div className="v">{dash.data.present}</div><div className="l">Present Today</div></div></div>
+          <div className="stat-card"><div className="ic"><UserX size={16} strokeWidth={1.8} /></div><div><div className="v">{dash.data.absent}</div><div className="l">Absent Today</div></div></div>
+          <div className="stat-card"><div className="ic"><Timer size={16} strokeWidth={1.8} /></div><div><div className="v">{dash.data.pendingLeaves}</div><div className="l">Leaves to Approve</div></div></div>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApi, Spinner, EmployeeSelect } from '../components/ui.jsx';
 import api, { rupee, thisMonth } from '../api.js';
+import { Printer, Lock, Check } from 'lucide-react';
 
 function prevMonth() {
   const d = new Date(); d.setMonth(d.getMonth() - 1);
@@ -27,7 +28,7 @@ export default function SalarySlip() {
       <div className="page-head">
         <div><h1>Salary Slip</h1><p>Generate & print individual employee pay slips</p></div>
         {slip && (
-          <button className="btn" onClick={() => window.print()}>🖨 Print Slip</button>
+          <button className="btn" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print Slip</button>
         )}
       </div>
 
@@ -166,8 +167,11 @@ export function SlipView({ slip }) {
       </div>
 
       {p.approved_by && (
-        <div style={{ padding: '8px 28px', fontSize: 12, color: '#6b7a72', borderTop: '1px solid var(--line)' }}>
-          {p.status === 'locked' ? '🔒 Locked' : '✓ Approved'} by <b>{p.approved_by}</b> on {p.approved_at}
+        <div style={{ padding: '8px 28px', fontSize: 12, color: '#6b7a72', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          {p.status === 'locked'
+            ? <Lock size={11} strokeWidth={2} style={{ color: '#1a1a2e' }} />
+            : <Check size={11} strokeWidth={2} style={{ color: '#2e7d32' }} />}
+          {p.status === 'locked' ? 'Locked' : 'Approved'} by <b>{p.approved_by}</b> on {p.approved_at}
         </div>
       )}
     </div>

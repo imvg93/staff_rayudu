@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../db.js';
 import { compute, upsertPayroll } from '../payrollEngine.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -91,8 +92,8 @@ router.put('/:id/unlock', (req, res) => {
   res.json(db.prepare('SELECT * FROM payroll WHERE id = ?').get(req.params.id));
 });
 
-// Approve all for a month
-router.post('/approve-all', (req, res) => {
+// Approve all for a month (admin/owner only)
+router.post('/approve-all', requireRole('admin', 'owner'), (req, res) => {
   const { month } = req.body;
   if (!month) return res.status(400).json({ error: 'month required' });
   const approvedBy = req.user?.name || 'Admin';
@@ -102,8 +103,8 @@ router.post('/approve-all', (req, res) => {
   res.json({ ok: true });
 });
 
-// Lock all for a month
-router.post('/lock-all', (req, res) => {
+// Lock all for a month (owner only)
+router.post('/lock-all', requireRole('owner'), (req, res) => {
   const { month } = req.body;
   if (!month) return res.status(400).json({ error: 'month required' });
   db.prepare("UPDATE payroll SET status='locked' WHERE month=? AND status='approved'").run(month);

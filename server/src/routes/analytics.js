@@ -2,8 +2,10 @@ import express from 'express';
 import db from '../db.js';
 
 const router = express.Router();
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const monthStr = () => new Date().toISOString().slice(0, 7);
+const localDate = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayStr = () => localDate();
+const monthStr = () => localDate().slice(0, 7);
 
 // Workforce analytics dashboard metrics
 router.get('/dashboard', (req, res) => {
@@ -112,6 +114,201 @@ router.get('/dept-attendance', (req, res) => {
     GROUP BY e.department
   `).all(date);
   res.json(rows);
+});
+
+// Dynamic payroll progress — prorated earnings based on attendance up to yesterday
+router.get('/payroll-progress', (req, res) => {
+  const now = new Date();
+  const yr = now.getFullYear();
+  const mo = now.getMonth(); // 0-indexed
+  const moNum = mo + 1;
+  const monthStr = `${yr}-${String(moNum).padStart(2, '0')}`;
+  const firstOfMonth = `${monthStr}-01`;
+  const daysInMonth = new Date(yr, moNum, 0).getDate();
+
+  // Yesterday — use local date parts to avoid UTC offset shifting the day
+  const yday = new Date(yr, mo, now.getDate() - 1);
+  const ydayStr = `${yday.getFullYear()}-${String(yday.getMonth() + 1).padStart(2, '0')}-${String(yday.getDate()).padStart(2, '0')}`;
+  // Only count days that fall within the current month
+  const daysElapsed = ydayStr >= firstOfMonth ? yday.getDate() : 0;
+
+  const employees = db.prepare(
+    "SELECT id, salary, monthly_allowed_holidays FROM employees WHERE status = 'active'"
+  ).all();
+
+  const totalMonthlySalary = employees.reduce((s, e) => s + (e.salary || 0), 0);
+
+  let earnedGross = 0;
+  let absenceDeductions = 0;
+  let halfDayDeductions = 0;
+  let unpaidLeaveDeductions = 0;
+  let sumPresent = 0, sumHalfDay = 0, sumAbsent = 0;
+  let sumWeeklyOff = 0, sumPaidLeave = 0, sumUnpaidLeave = 0;
+
+  if (daysElapsed > 0) {
+    const rows = db.prepare(`
+      SELECT employee_id,
+        SUM(CASE WHEN status='present'      THEN 1 ELSE 0 END) AS present,
+        SUM(CASE WHEN status='half_day'     THEN 1 ELSE 0 END) AS half_day,
+        SUM(CASE WHEN status='absent'       THEN 1 ELSE 0 END) AS absent,
+        SUM(CASE WHEN status='weekly_off'   THEN 1 ELSE 0 END) AS weekly_off,
+        SUM(CASE WHEN status='paid_leave'   THEN 1 ELSE 0 END) AS paid_leave,
+        SUM(CASE WHEN status='unpaid_leave' THEN 1 ELSE 0 END) AS unpaid_leave,
+        COUNT(*) AS total_marked
+      FROM attendance
+      WHERE date >= ? AND date <= ?
+      GROUP BY employee_id
+    `).all(firstOfMonth, ydayStr);
+
+    const attMap = Object.fromEntries(rows.map((r) => [r.employee_id, r]));
+
+    for (const emp of employees) {
+      const perDay = (emp.salary || 0) / daysInMonth;
+      const allowed = emp.monthly_allowed_holidays || 0;
+      const a = attMap[emp.id] || {
+        present: 0, half_day: 0, absent: 0,
+        weekly_off: 0, paid_leave: 0, unpaid_leave: 0, total_marked: 0,
+      };
+
+      // Extra absences beyond the free allowance → deducted
+      const extraAbsent = Math.max(0, a.absent - allowed);
+      const absDed    = extraAbsent * perDay;
+      const halfDed   = a.half_day * 0.5 * perDay;
+      const unpaidDed = a.unpaid_leave * perDay;
+
+      // Gross = every marked day counts as a full day before deductions
+      earnedGross        += a.total_marked * perDay;
+      absenceDeductions  += absDed;
+      halfDayDeductions  += halfDed;
+      unpaidLeaveDeductions += unpaidDed;
+
+      sumPresent    += a.present;
+      sumHalfDay    += a.half_day;
+      sumAbsent     += a.absent;
+      sumWeeklyOff  += a.weekly_off;
+      sumPaidLeave  += a.paid_leave;
+      sumUnpaidLeave += a.unpaid_leave;
+    }
+  }
+
+  const totalDeductions = absenceDeductions + halfDayDeductions + unpaidLeaveDeductions;
+  const netPayable      = earnedGross - totalDeductions;
+
+  res.json({
+    totalMonthlySalary:     Math.round(totalMonthlySalary),
+    earnedGross:            Math.round(earnedGross),
+    totalDeductions:        Math.round(totalDeductions),
+    absenceDeductions:      Math.round(absenceDeductions),
+    halfDayDeductions:      Math.round(halfDayDeductions),
+    unpaidLeaveDeductions:  Math.round(unpaidLeaveDeductions),
+    netPayable:             Math.round(netPayable),
+    daysElapsed,
+    daysInMonth,
+    month:     monthStr,
+    asOfDate:  ydayStr,
+    attendanceSummary: {
+      present:     sumPresent,
+      halfDay:     sumHalfDay,
+      absent:      sumAbsent,
+      weeklyOff:   sumWeeklyOff,
+      paidLeave:   sumPaidLeave,
+      unpaidLeave: sumUnpaidLeave,
+    },
+  });
+});
+
+// Per-employee payroll deduction details for current month (up to yesterday)
+router.get('/payroll-deductions', (req, res) => {
+  const now = new Date();
+  const yr = now.getFullYear();
+  const mo = now.getMonth();
+  const moNum = mo + 1;
+  const monthStr = `${yr}-${String(moNum).padStart(2, '0')}`;
+  const firstOfMonth = `${monthStr}-01`;
+  const daysInMonth = new Date(yr, moNum, 0).getDate();
+
+  const yday = new Date(yr, mo, now.getDate() - 1);
+  const ydayStr = `${yday.getFullYear()}-${String(yday.getMonth() + 1).padStart(2, '0')}-${String(yday.getDate()).padStart(2, '0')}`;
+  const daysElapsed = ydayStr >= firstOfMonth ? yday.getDate() : 0;
+
+  const employees = db.prepare(
+    "SELECT id, name, emp_code, department, salary, monthly_allowed_holidays FROM employees WHERE status = 'active' ORDER BY name"
+  ).all();
+
+  if (daysElapsed === 0) return res.json([]);
+
+  // Aggregated counts per employee
+  const aggRows = db.prepare(`
+    SELECT employee_id,
+      SUM(CASE WHEN status='present'      THEN 1 ELSE 0 END) AS present,
+      SUM(CASE WHEN status='half_day'     THEN 1 ELSE 0 END) AS half_day,
+      SUM(CASE WHEN status='absent'       THEN 1 ELSE 0 END) AS absent,
+      SUM(CASE WHEN status='weekly_off'   THEN 1 ELSE 0 END) AS weekly_off,
+      SUM(CASE WHEN status='paid_leave'   THEN 1 ELSE 0 END) AS paid_leave,
+      SUM(CASE WHEN status='unpaid_leave' THEN 1 ELSE 0 END) AS unpaid_leave,
+      COUNT(*) AS total_marked
+    FROM attendance WHERE date >= ? AND date <= ?
+    GROUP BY employee_id
+  `).all(firstOfMonth, ydayStr);
+  const aggMap = Object.fromEntries(aggRows.map((r) => [r.employee_id, r]));
+
+  // All absence/half_day/unpaid_leave dates per employee for display
+  const dateRows = db.prepare(`
+    SELECT employee_id, date, status
+    FROM attendance
+    WHERE date >= ? AND date <= ?
+      AND status IN ('absent','half_day','unpaid_leave')
+    ORDER BY employee_id, date
+  `).all(firstOfMonth, ydayStr);
+  const dateMap = {};
+  for (const row of dateRows) {
+    if (!dateMap[row.employee_id]) dateMap[row.employee_id] = [];
+    dateMap[row.employee_id].push({ date: row.date, status: row.status });
+  }
+
+  const result = [];
+  for (const emp of employees) {
+    const perDay = (emp.salary || 0) / daysInMonth;
+    const allowed = emp.monthly_allowed_holidays || 0;
+    const a = aggMap[emp.id] || {
+      present: 0, half_day: 0, absent: 0,
+      weekly_off: 0, paid_leave: 0, unpaid_leave: 0, total_marked: 0,
+    };
+
+    const extraAbsent       = Math.max(0, a.absent - allowed);
+    const absenceDed        = Math.round(extraAbsent * perDay);
+    const halfDayDed        = Math.round(a.half_day * 0.5 * perDay);
+    const unpaidLeaveDed    = Math.round(a.unpaid_leave * perDay);
+    const totalDeduction    = absenceDed + halfDayDed + unpaidLeaveDed;
+    const earnedGross       = Math.round(a.total_marked * perDay);
+    const netPayable        = earnedGross - totalDeduction;
+
+    result.push({
+      id: emp.id,
+      name: emp.name,
+      emp_code: emp.emp_code,
+      department: emp.department,
+      salary: emp.salary || 0,
+      perDay: Math.round(perDay),
+      allowedHolidays: allowed,
+      present: a.present,
+      absent: a.absent,
+      half_day: a.half_day,
+      weekly_off: a.weekly_off,
+      paid_leave: a.paid_leave,
+      unpaid_leave: a.unpaid_leave,
+      extraAbsent,
+      absenceDed,
+      halfDayDed,
+      unpaidLeaveDed,
+      totalDeduction,
+      earnedGross,
+      netPayable,
+      dates: dateMap[emp.id] || [],
+    });
+  }
+
+  res.json(result);
 });
 
 // Celebrations: birthdays & work anniversaries in next 30 days

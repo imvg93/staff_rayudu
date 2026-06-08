@@ -20,13 +20,38 @@ import analyticsRoutes from './routes/analytics.js';
 
 dotenv.config();
 
+// ── Startup validation ────────────────────────────────────
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_SECRET env var is required in production');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: JWT_SECRET not set — using insecure demo secret. Set it before going to production.');
+  }
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+
+// ── CORS ──────────────────────────────────────────────────
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+  : null; // null = allow all (dev only)
+
+app.use(cors({
+  origin: allowedOrigins
+    ? (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+        else cb(new Error('Not allowed by CORS'));
+      }
+    : true,
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(uploadDir));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'RGM Staff API' }));
@@ -63,11 +88,26 @@ app.use('/api/promotions', crudRouter('promotions',
 app.use('/api/exits', crudRouter('exits',
   ['employee_id', 'resignation_date', 'last_working_day', 'reason', 'notice_days', 'settlement_amount', 'status'], { withEmployee: true }));
 
-// error handler
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: err.message || 'Server error' });
+// ── Serve React build in production ──────────────────────
+const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+} else {
+  // ── 404 handler (dev only) ───────────────────────────────
+  app.use((req, res) => {
+    res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  });
+}
+
+// ── Global error handler ──────────────────────────────────
+app.use((err, req, res, _next) => {
+  const status = err.status || 500;
+  if (status >= 500) console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`, err.message);
+  res.status(status).json({ error: err.message || 'Server error' });
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`RGM Staff API running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`RGM Staff API running on http://localhost:${PORT} [${process.env.NODE_ENV || 'development'}]`);
+});

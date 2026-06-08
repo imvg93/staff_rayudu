@@ -105,62 +105,71 @@ export function EmployeeSelect({ value, onChange, allowAll = false, placeholder 
       <div
         onClick={() => setOpen((o) => !o)}
         style={{
-          border: '1px solid var(--line, #d8dfd9)', borderRadius: 6, padding: '7px 10px',
+          border: '1px solid var(--line)', borderRadius: 7, padding: '8px 11px',
           cursor: 'pointer', background: '#fff', display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', fontSize: 13, userSelect: 'none',
-          color: value ? '#1a1a1a' : '#999',
+          alignItems: 'center', fontSize: 13.5, userSelect: 'none',
+          color: value ? 'var(--ink)' : 'var(--subtle)',
+          transition: 'border-color .15s',
+          fontFamily: 'var(--font)',
         }}
       >
         <span>{displayText}</span>
-        <span style={{ fontSize: 10, color: '#999', marginLeft: 6 }}>▾</span>
+        <span style={{ fontSize: 9, color: 'var(--subtle)', marginLeft: 6 }}>▾</span>
       </div>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
-          background: '#fff', border: '1px solid var(--line, #d8dfd9)', borderRadius: 6,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)', marginTop: 2,
+          background: '#fff', border: '1px solid var(--line)', borderRadius: 8,
+          boxShadow: '0 4px 20px rgba(17,24,39,.1)', marginTop: 3,
         }}>
-          <div style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>
+          <div style={{ padding: '7px 10px', borderBottom: '1px solid var(--line)' }}>
             <input
               autoFocus
-              placeholder="Search name, code or dept…"
+              placeholder="Search name, code or department…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              style={{ width: '100%', border: 'none', outline: 'none', fontSize: 12.5, background: 'transparent' }}
+              style={{
+                width: '100%', border: 'none', outline: 'none', fontSize: 12.5,
+                background: 'transparent', fontFamily: 'var(--font)', color: 'var(--ink)',
+              }}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 228, overflowY: 'auto' }}>
             {allowAll && (
               <div
                 onClick={() => select('')}
                 style={{
-                  padding: '7px 12px', cursor: 'pointer', fontSize: 12.5,
-                  background: !value ? '#f0faf1' : 'transparent',
-                  color: !value ? '#2e7d32' : '#555',
+                  padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                  background: !value ? '#F0FDF4' : 'transparent',
+                  color: !value ? 'var(--green)' : 'var(--ink-2)',
+                  fontWeight: !value ? 500 : 400,
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f7f5'}
-                onMouseLeave={(e) => e.currentTarget.style.background = !value ? '#f0faf1' : 'transparent'}
+                onMouseEnter={(e) => e.currentTarget.style.background = !value ? '#F0FDF4' : '#F9FAFB'}
+                onMouseLeave={(e) => e.currentTarget.style.background = !value ? '#F0FDF4' : 'transparent'}
               >
                 {placeholder || 'All Employees'}
               </div>
             )}
             {filtered.length === 0 && (
-              <div style={{ padding: '10px 12px', color: '#999', fontSize: 12 }}>No match found</div>
+              <div style={{ padding: '12px', color: 'var(--subtle)', fontSize: 12.5, textAlign: 'center' }}>
+                No match found
+              </div>
             )}
             {filtered.map((e) => (
               <div
                 key={e.id}
                 onClick={() => select(String(e.id))}
                 style={{
-                  padding: '7px 12px', cursor: 'pointer', fontSize: 12.5,
-                  background: String(e.id) === String(value) ? '#f0faf1' : 'transparent',
+                  padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                  background: String(e.id) === String(value) ? '#F0FDF4' : 'transparent',
+                  color: String(e.id) === String(value) ? 'var(--green)' : 'var(--ink)',
                 }}
-                onMouseEnter={(ev) => ev.currentTarget.style.background = '#f5f7f5'}
-                onMouseLeave={(ev) => ev.currentTarget.style.background = String(e.id) === String(value) ? '#f0faf1' : 'transparent'}
+                onMouseEnter={(ev) => ev.currentTarget.style.background = String(e.id) === String(value) ? '#F0FDF4' : '#F9FAFB'}
+                onMouseLeave={(ev) => ev.currentTarget.style.background = String(e.id) === String(value) ? '#F0FDF4' : 'transparent'}
               >
-                <span style={{ fontWeight: 600 }}>{e.name}</span>
-                <span style={{ color: '#6b7a72', marginLeft: 6, fontSize: 11.5 }}>{e.emp_code} · {e.department}</span>
+                <span style={{ fontWeight: 500 }}>{e.name}</span>
+                <span style={{ color: 'var(--muted)', marginLeft: 6, fontSize: 11.5 }}>{e.emp_code} · {e.department}</span>
               </div>
             ))}
           </div>

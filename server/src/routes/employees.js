@@ -8,12 +8,22 @@ const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.join(__dirname, '..', '..', 'uploads');
 
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) =>
     cb(null, `emp-${Date.now()}-${Math.round(Math.random() * 1e6)}${path.extname(file.originalname)}`),
 });
-const upload = multer({ storage });
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3 MB max
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME.has(file.mimetype)) cb(null, true);
+    else cb(Object.assign(new Error('Only image files are allowed (JPEG, PNG, WEBP, GIF)'), { status: 400 }));
+  },
+});
 
 const FIELDS = ['name','department','designation','joining_date','salary','shift',
   'phone','emergency_name','emergency_phone','dob','status','photo_url'];
