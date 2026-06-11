@@ -20,10 +20,10 @@ const NAV = [
   { to: '/leaves',     label: 'Leave',              Icon: Umbrella,      group: 'Workforce' },
   { to: '/timeline',   label: 'Employee Timeline',  Icon: ScrollText,    group: 'Workforce' },
 
-  { to: '/payroll',       label: 'Payroll',           Icon: Banknote,      group: 'Finance', roles: ['admin','owner'] },
-  { to: '/salary-slip',   label: 'Salary Slip',       Icon: FileText,      group: 'Finance', roles: ['admin','owner'] },
-  { to: '/salary-report', label: 'Salary Report',     Icon: BarChart3,     group: 'Finance', roles: ['admin','owner'] },
-  { to: '/advances',      label: 'Advances & Loans',  Icon: Landmark,      group: 'Finance', roles: ['admin','owner'] },
+  { to: '/payroll',       label: 'Payroll',           Icon: Banknote,      group: 'Finance', roles: ['supervisor','admin','owner'] },
+  { to: '/salary-slip',   label: 'Salary Slip',       Icon: FileText,      group: 'Finance', roles: ['supervisor','admin','owner'] },
+  { to: '/salary-report', label: 'Salary Report',     Icon: BarChart3,     group: 'Finance', roles: ['supervisor','admin','owner'] },
+  { to: '/advances',      label: 'Advances & Loans',  Icon: Landmark,      group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/penalties',     label: 'Penalties & Fines', Icon: AlertTriangle,  group: 'Finance' },
   { to: '/expenses',      label: 'Daily Expenses',    Icon: Receipt,       group: 'Finance' },
 
@@ -31,7 +31,7 @@ const NAV = [
   { to: '/performance', label: 'Performance Notes', Icon: ClipboardList, group: 'Records' },
   { to: '/assets',      label: 'Uniforms & Assets', Icon: Shirt,         group: 'Records' },
   { to: '/promotions',  label: 'Promotions',        Icon: TrendingUp,    group: 'Records' },
-  { to: '/exits',       label: 'Exit & Settlement', Icon: DoorOpen,      group: 'Records', roles: ['admin','owner'] },
+  { to: '/exits',       label: 'Exit & Settlement', Icon: DoorOpen,      group: 'Records', roles: ['supervisor','admin','owner'] },
 ];
 
 const TITLES = {
