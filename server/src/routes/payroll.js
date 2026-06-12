@@ -44,7 +44,7 @@ router.post('/generate', (req, res) => {
 });
 
 // Manual adjustment (bonus, food, correction, overtime) — blocked if locked
-router.put('/:id', (req, res) => {
+router.put('/:id', requireRole('owner', 'admin', 'supervisor'), (req, res) => {
   const row = db.prepare('SELECT * FROM payroll WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   if (row.status === 'locked') return res.status(403).json({ error: 'Payroll is locked — cannot edit' });
@@ -66,7 +66,7 @@ router.put('/:id', (req, res) => {
 });
 
 // Approve
-router.put('/:id/approve', (req, res) => {
+router.put('/:id/approve', requireRole('owner', 'admin'), (req, res) => {
   const approvedBy = req.user?.name || 'Admin';
   const now = new Date().toISOString().slice(0, 10);
   const row = db.prepare('SELECT * FROM payroll WHERE id = ?').get(req.params.id);
@@ -78,13 +78,13 @@ router.put('/:id/approve', (req, res) => {
 });
 
 // Lock
-router.put('/:id/lock', (req, res) => {
+router.put('/:id/lock', requireRole('owner', 'admin', 'supervisor'), (req, res) => {
   db.prepare("UPDATE payroll SET status='locked' WHERE id=?").run(req.params.id);
   res.json(db.prepare('SELECT * FROM payroll WHERE id = ?').get(req.params.id));
 });
 
-// Unlock — revert locked → approved (admin/owner only; enforced on frontend)
-router.put('/:id/unlock', (req, res) => {
+// Unlock — revert locked → approved (admin/owner only)
+router.put('/:id/unlock', requireRole('owner', 'admin'), (req, res) => {
   const row = db.prepare('SELECT * FROM payroll WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   if (row.status !== 'locked') return res.status(400).json({ error: 'Not locked' });
@@ -103,11 +103,11 @@ router.post('/approve-all', requireRole('admin', 'owner'), (req, res) => {
   res.json({ ok: true });
 });
 
-// Lock all for a month (owner only)
-router.post('/lock-all', requireRole('owner'), (req, res) => {
+// Lock all for a month (owner, admin, supervisor)
+router.post('/lock-all', requireRole('owner', 'admin', 'supervisor'), (req, res) => {
   const { month } = req.body;
   if (!month) return res.status(400).json({ error: 'month required' });
-  db.prepare("UPDATE payroll SET status='locked' WHERE month=? AND status='approved'").run(month);
+  db.prepare("UPDATE payroll SET status='locked' WHERE month=? AND status IN ('processed', 'approved')").run(month);
   res.json({ ok: true });
 });
 

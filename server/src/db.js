@@ -117,15 +117,6 @@ CREATE TABLE IF NOT EXISTS penalties (
   reason TEXT
 );
 
-CREATE TABLE IF NOT EXISTS expenses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  date TEXT NOT NULL,
-  category TEXT NOT NULL,
-  amount REAL NOT NULL,
-  note TEXT,
-  created_by TEXT
-);
-
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
@@ -186,7 +177,6 @@ CREATE INDEX IF NOT EXISTS idx_payroll_employee_month    ON payroll(employee_id,
 CREATE INDEX IF NOT EXISTS idx_payroll_month_status      ON payroll(month, status);
 CREATE INDEX IF NOT EXISTS idx_advances_employee         ON advances(employee_id);
 CREATE INDEX IF NOT EXISTS idx_penalties_employee_date   ON penalties(employee_id, date);
-CREATE INDEX IF NOT EXISTS idx_expenses_date             ON expenses(date);
 CREATE INDEX IF NOT EXISTS idx_employees_status          ON employees(status);
 `;
 

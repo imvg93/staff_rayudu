@@ -5,7 +5,7 @@ import {
   LayoutDashboard, GaugeCircle, PartyPopper,
   Users, CalendarCheck, Clock, Umbrella, ScrollText,
   Banknote, FileText, BarChart3, Landmark, AlertTriangle,
-  Receipt, FolderOpen, ClipboardList, Shirt, TrendingUp, DoorOpen,
+  FolderOpen, ClipboardList, Shirt, TrendingUp, DoorOpen,
   LogOut, Menu,
 } from 'lucide-react';
 
@@ -25,7 +25,6 @@ const NAV = [
   { to: '/salary-report', label: 'Salary Report',     Icon: BarChart3,     group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/advances',      label: 'Advances & Loans',  Icon: Landmark,      group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/penalties',     label: 'Penalties & Fines', Icon: AlertTriangle,  group: 'Finance' },
-  { to: '/expenses',      label: 'Daily Expenses',    Icon: Receipt,       group: 'Finance' },
 
   { to: '/documents',   label: 'Documents',         Icon: FolderOpen,    group: 'Records' },
   { to: '/performance', label: 'Performance Notes', Icon: ClipboardList, group: 'Records' },
@@ -109,6 +108,14 @@ export default function Layout() {
             <h2>{title}</h2>
           </div>
           <div className="right">
+            <a
+              className="company-credit"
+              href="https://webresfolio.com"
+              target="_blank"
+              rel="noreferrer"
+            >
+              by Webresfolio
+            </a>
             <span className="role-chip">{user.role}</span>
           </div>
         </header>

@@ -4,7 +4,7 @@ A complete, centralized digital platform that replaces manual registers, paperwo
 books and document files. All operations are run by **Admin, Owner, and Supervisor** from a
 web dashboard — staff do **not** need any app.
 
-> **Demo build.** Pre-loaded with realistic sample staff, attendance, payroll and expenses so
+> **Demo build.** Pre-loaded with realistic sample staff, attendance and payroll so
 > the whole system can be shown working immediately.
 
 ---
@@ -63,7 +63,7 @@ The login screen has one-click buttons to fill each account.
 
 **Overview** — Workforce Analytics Dashboard · Supervisor Desk · Celebrations
 **Workforce** — Staff Master · Attendance · Shifts · Leave · Employee Timeline
-**Finance** — Payroll · Advances & Loans · Penalties & Fines · Daily Expenses
+**Finance** — Payroll · Advances & Loans · Penalties & Fines
 **Records** — Documents · Performance Notes · Uniforms & Assets · Exit & Settlement
 
 ### Payroll logic
@@ -85,7 +85,6 @@ Matches the spec example: ₹18,000 − ₹2,000 advance − ₹500 penalty = **
 3. **Attendance → Daily Entry** → mark P/A/H/L + Late, Save. Switch to **Monthly Report**.
 4. **Advances** → add ₹5,000 advance @ ₹1,000/mo → balance tracked.
 5. **Payroll** → pick last month → **Process Payroll** → net = base − advance − penalty.
-6. **Daily Expenses** → add milk/veg/gas → category summary cards + total update.
 7. **Leave** → approve a pending request → balance reflects.
 8. **Employee Timeline** → pick an employee → full history on one screen.
 9. **Celebrations** → upcoming birthdays & work anniversaries.

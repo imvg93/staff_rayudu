@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid, AreaChart, Area,
+  CartesianGrid, AreaChart, Area,
 } from 'recharts';
 import {
   Users, UserCheck, UserX, Umbrella, UserPlus, CircleDollarSign, Landmark, Timer,
-  TrendingUp, TrendingDown, CalendarCheck, Receipt, AlertTriangle, Award,
+  TrendingUp, TrendingDown, CalendarCheck, AlertTriangle, Award,
   Zap, Activity, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import api, { rupee } from '../api.js';
@@ -642,8 +642,6 @@ export default function Dashboard() {
   const attPct = data.totalEmployees > 0
     ? Math.round((data.present / data.totalEmployees) * 100) : 0;
 
-  const payMax = Math.max(data.salaryExpense, data.outstandingAdvances, data.monthExpenses, 1);
-
   const deptSource = deptAtt.length > 0 ? deptAtt : data.deptDistribution.map((d) => ({
     department: d.department, total: d.count, present: Math.round(d.count * 0.82),
   }));
@@ -664,11 +662,6 @@ export default function Dashboard() {
     data.pendingLeaves > 0
       ? { icon: Timer, color: '#D97706', bg: '#FFFBEB', time: 'Action needed',
           text: `${data.pendingLeaves} leave request${data.pendingLeaves > 1 ? 's' : ''} pending approval` }
-      : null,
-    data.expenseTrend?.length > 0
-      ? { icon: Receipt, color: '#2563EB', bg: '#EFF6FF',
-          time: data.expenseTrend[data.expenseTrend.length - 1]?.date || '',
-          text: `Latest daily expense: ${rupee(data.expenseTrend[data.expenseTrend.length - 1]?.total || 0)}` }
       : null,
   ].filter(Boolean);
 
@@ -999,11 +992,10 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Outstanding & expenses */}
+                {/* Outstanding advances */}
                 <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                   {[
                     { label: 'Advances Out',   v: data.outstandingAdvances, c: '#92400E', bg: '#FEF3C7' },
-                    { label: 'Month Expenses', v: data.monthExpenses,        c: '#1B4332', bg: '#F0FDF4' },
                   ].map((s) => (
                     <div key={s.label} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, background: s.bg }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: s.c, fontFeatureSettings: "'tnum'" }}>{rupee(s.v)}</div>
@@ -1018,7 +1010,6 @@ export default function Dashboard() {
                 {[
                   { label: 'Monthly Commitment', v: data.salaryExpense,       c: '#6D28D9', bg: '#F5F3FF' },
                   { label: 'Advances Out',        v: data.outstandingAdvances, c: '#92400E', bg: '#FEF3C7' },
-                  { label: 'Month Expenses',      v: data.monthExpenses,       c: '#1E40AF', bg: '#EFF6FF' },
                 ].map((s) => (
                   <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: s.bg }}>
                     <span style={{ fontSize: 11.5, color: s.c + 'cc', fontWeight: 500 }}>{s.label}</span>
@@ -1079,36 +1070,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Section 5: Expense Trend + Attendance Bar + Activity ── */}
-      <div className="three-col">
-        {/* Expense Trend */}
-        <div className="panel">
-          <div className="panel-head">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 7, background: '#F0FDF4', color: '#1B4332', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Receipt size={13} strokeWidth={2} />
-              </div>
-              <h3 style={{ margin: 0 }}>Daily Expenses</h3>
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--subtle)' }}>7 days</span>
-          </div>
-          <div className="panel-pad" style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.expenseTrend} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)}
-                  fontSize={10} tick={{ fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis fontSize={10} tick={{ fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v) => [rupee(v), 'Expenses']} contentStyle={chartStyle} cursor={{ stroke: '#E5E7EB' }} />
-                <Line type="monotone" dataKey="total" stroke="#1B4332" strokeWidth={2}
-                  dot={{ r: 3.5, fill: '#1B4332', strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: '#1B4332', strokeWidth: 2, stroke: '#fff' }}
-                  isAnimationActive animationDuration={1200} animationEasing="ease-out" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
+      {/* ── Section 5: Attendance Bar + Activity ── */}
+      <div className="two-col">
         {/* Attendance Leaders Bar */}
         <div className="panel">
           <div className="panel-head">

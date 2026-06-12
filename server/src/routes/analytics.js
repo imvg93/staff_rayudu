@@ -33,7 +33,6 @@ router.get('/dashboard', (req, res) => {
 
   const salaryExpense = db.prepare("SELECT COALESCE(SUM(salary),0) s FROM employees WHERE status='active'").get().s;
   const outstandingAdvances = db.prepare('SELECT COALESCE(SUM(balance),0) s FROM advances').get().s;
-  const monthExpenses = db.prepare("SELECT COALESCE(SUM(amount),0) s FROM expenses WHERE substr(date,1,7)=?").get(month).s;
   const pendingLeaves = db.prepare("SELECT COUNT(*) c FROM leaves WHERE status='pending'").get().c;
 
   const deptDistribution = db.prepare(`
@@ -56,13 +55,6 @@ router.get('/dashboard', (req, res) => {
   const topAttendance = ranked.slice(0, 5);
   const lowAttendance = ranked.slice(-5).reverse();
 
-  // last 7 days expense trend
-  const expenseTrend = db.prepare(`
-    SELECT date, SUM(amount) AS total FROM expenses
-    WHERE date >= date('now','-7 days')
-    GROUP BY date ORDER BY date
-  `).all();
-
   res.json({
     totalEmployees,
     present: todayCounts.present || 0,
@@ -72,12 +64,10 @@ router.get('/dashboard', (req, res) => {
     newJoiners,
     salaryExpense,
     outstandingAdvances,
-    monthExpenses,
     pendingLeaves,
     deptDistribution,
     topAttendance,
     lowAttendance,
-    expenseTrend,
     date,
   });
 });

@@ -34,7 +34,12 @@ export default function Payroll() {
 
 function MonthlyPayroll() {
   const { user } = useAuth();
-  const canApprove = user?.role === 'admin' || user?.role === 'owner';
+  const isSupervisor = user?.role === 'supervisor';
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
+  const canEdit = isAdminOrOwner || isSupervisor;
+  const canApprove = isAdminOrOwner;
+  const canLock = isAdminOrOwner || isSupervisor;
+  const canUnlock = isAdminOrOwner;
   const [month, setMonth] = useState(prevMonth());
   const [rows, setRows] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +47,14 @@ function MonthlyPayroll() {
   const [adjustRow, setAdjustRow] = useState(null);
   const [adjForm, setAdjForm] = useState({});
   const [adjSaving, setAdjSaving] = useState(false);
+
+  const adjustmentInputValue = (value) => (value === 0 || value == null ? '' : value);
+  const setAdjustmentAmount = (field, value) => {
+    setAdjForm((current) => ({
+      ...current,
+      [field]: value === '' ? '' : Number(value),
+    }));
+  };
 
   const load = () => { setRows(null); api.get(`/payroll?month=${month}`).then((r) => setRows(r.data)); };
   useEffect(load, [month]);
@@ -72,7 +85,13 @@ function MonthlyPayroll() {
   const saveAdj = async () => {
     setAdjSaving(true);
     try {
-      await api.put(`/payroll/${adjRow.id}`, adjForm);
+      await api.put(`/payroll/${adjRow.id}`, {
+        overtime: Number(adjForm.overtime) || 0,
+        bonus: Number(adjForm.bonus) || 0,
+        food_deduction: Number(adjForm.food_deduction) || 0,
+        other_deductions: Number(adjForm.other_deductions) || 0,
+        manual_correction: Number(adjForm.manual_correction) || 0,
+      });
       setAdjRow(null);
       load();
     } finally { setAdjSaving(false); }
@@ -119,10 +138,10 @@ function MonthlyPayroll() {
           <>
             <button className="btn ghost sm" onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Printer size={13} strokeWidth={1.8} /> Print</button>
             {canApprove && (
-              <>
-                <button className="btn sm gray" onClick={approveAll} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckCheck size={13} strokeWidth={1.8} /> Approve All</button>
-                <button className="btn sm" style={{ background: '#1a1a2e', display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={lockAll} disabled={busy}><Lock size={13} strokeWidth={1.8} /> Lock Month</button>
-              </>
+              <button className="btn sm gray" onClick={approveAll} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckCheck size={13} strokeWidth={1.8} /> Approve All</button>
+            )}
+            {canLock && (
+              <button className="btn sm" style={{ background: '#1a1a2e', display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={lockAll} disabled={busy}><Lock size={13} strokeWidth={1.8} /> Lock Month</button>
             )}
           </>
         )}
@@ -182,18 +201,18 @@ function MonthlyPayroll() {
                       <td>
                         <div className="btn-row" style={{ gap: 4 }}>
                           <button className="btn sm ghost" onClick={() => openSlip(r)} title="View Slip" style={{ display: 'inline-flex', alignItems: 'center' }}><FileText size={13} strokeWidth={1.8} /></button>
-                          {canApprove && r.status !== 'locked' && (
+                          {canEdit && r.status !== 'locked' && (
                             <button className="btn sm gray" onClick={() => openAdjust(r)} title="Adjust" style={{ display: 'inline-flex', alignItems: 'center' }}><Pencil size={12} strokeWidth={1.8} /></button>
                           )}
                           {canApprove && r.status === 'processed' && (
                             <button className="btn sm" style={{ background: '#2e7d32', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
                               onClick={() => approve(r)} title="Approve"><Check size={12} strokeWidth={2} /></button>
                           )}
-                          {canApprove && r.status === 'approved' && (
+                          {canLock && (r.status === 'approved' || (isSupervisor && r.status === 'processed')) && (
                             <button className="btn sm" style={{ background: '#1a1a2e', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
                               onClick={() => lock(r)} title="Lock"><Lock size={12} strokeWidth={2} /></button>
                           )}
-                          {canApprove && r.status === 'locked' && (
+                          {canUnlock && r.status === 'locked' && (
                             <button className="btn sm" style={{ background: '#c0392b', padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
                               title="Unlock — revert to Approved" onClick={() => unlock(r)}><LockOpen size={12} strokeWidth={2} /></button>
                           )}
@@ -244,28 +263,28 @@ function MonthlyPayroll() {
           <div className="form-grid">
             <div>
               <label style={{ fontSize: 12, color: '#6b7a72', display: 'block', marginBottom: 4 }}>Overtime (₹)</label>
-              <input type="number" min="0" value={adjForm.overtime || 0}
-                onChange={(e) => setAdjForm({ ...adjForm, overtime: Number(e.target.value) })} />
+              <input type="number" min="0" placeholder="0" value={adjustmentInputValue(adjForm.overtime)}
+                onChange={(e) => setAdjustmentAmount('overtime', e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#6b7a72', display: 'block', marginBottom: 4 }}>Bonus (₹)</label>
-              <input type="number" min="0" value={adjForm.bonus || 0}
-                onChange={(e) => setAdjForm({ ...adjForm, bonus: Number(e.target.value) })} />
+              <input type="number" min="0" placeholder="0" value={adjustmentInputValue(adjForm.bonus)}
+                onChange={(e) => setAdjustmentAmount('bonus', e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#6b7a72', display: 'block', marginBottom: 4 }}>Food Deduction (₹)</label>
-              <input type="number" min="0" value={adjForm.food_deduction || 0}
-                onChange={(e) => setAdjForm({ ...adjForm, food_deduction: Number(e.target.value) })} />
+              <input type="number" min="0" placeholder="0" value={adjustmentInputValue(adjForm.food_deduction)}
+                onChange={(e) => setAdjustmentAmount('food_deduction', e.target.value)} />
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#6b7a72', display: 'block', marginBottom: 4 }}>Other Deductions (₹)</label>
-              <input type="number" min="0" value={adjForm.other_deductions || 0}
-                onChange={(e) => setAdjForm({ ...adjForm, other_deductions: Number(e.target.value) })} />
+              <input type="number" min="0" placeholder="0" value={adjustmentInputValue(adjForm.other_deductions)}
+                onChange={(e) => setAdjustmentAmount('other_deductions', e.target.value)} />
             </div>
             <div style={{ gridColumn: '1/-1' }}>
               <label style={{ fontSize: 12, color: '#6b7a72', display: 'block', marginBottom: 4 }}>Manual Correction (₹, +/−)</label>
-              <input type="number" value={adjForm.manual_correction || 0}
-                onChange={(e) => setAdjForm({ ...adjForm, manual_correction: Number(e.target.value) })} />
+              <input type="number" placeholder="0" value={adjustmentInputValue(adjForm.manual_correction)}
+                onChange={(e) => setAdjustmentAmount('manual_correction', e.target.value)} />
               <div style={{ fontSize: 11, color: '#6b7a72', marginTop: 3 }}>Positive = add to salary · Negative = subtract from salary</div>
             </div>
           </div>

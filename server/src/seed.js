@@ -19,7 +19,7 @@ const thisYear = (mm, dd) => `${today.getFullYear()}-${String(mm).padStart(2, '0
 const monthKey = (d = today) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 console.log('Resetting database…');
-const tables = ['payroll','attendance','shifts','leaves','advances','penalties','expenses',
+const tables = ['payroll','attendance','shifts','leaves','advances','penalties',
   'documents','performance_notes','assets','exits','promotions','employees','users'];
 db.exec('PRAGMA foreign_keys = OFF;');
 for (const t of tables) db.exec(`DROP TABLE IF EXISTS ${t};`);
@@ -177,23 +177,6 @@ const insPen = db.prepare('INSERT INTO penalties (employee_id,date,type,amount,r
 insPen.run(empIds[2], daysAgo(12), 'Late Arrival', 500, 'Repeated late attendance (5 times)');
 insPen.run(empIds[5], daysAgo(8), 'Policy Violation', 300, 'Uniform not worn');
 insPen.run(empIds[14], daysAgo(18), 'Equipment Damage', 700, 'Broke serving tray set');
-
-// ---- expenses (last 20 days, hotel categories) -----------------------------
-const insExp = db.prepare('INSERT INTO expenses (date,category,amount,note,created_by) VALUES (?,?,?,?,?)');
-const expCats = [
-  ['milk', 3500], ['vegetables', 2800], ['chicken', 6500], ['mutton', 8200],
-  ['gas', 1200], ['misc', 900],
-];
-for (let d = 20; d >= 0; d--) {
-  const date = daysAgo(d);
-  // pick 2-3 categories per day
-  const n = 2 + (d % 2);
-  for (let k = 0; k < n; k++) {
-    const [cat, base] = expCats[(d + k) % expCats.length];
-    const amount = Math.round(base * (0.8 + ((d * 7 + k * 3) % 5) / 10));
-    insExp.run(date, cat, amount, `Daily ${cat} purchase`, 'Suresh (Supervisor)');
-  }
-}
 
 // ---- documents -------------------------------------------------------------
 const insDoc = db.prepare('INSERT INTO documents (employee_id,doc_type,number,file_url,verified) VALUES (?,?,?,?,?)');

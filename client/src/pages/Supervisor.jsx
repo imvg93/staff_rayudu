@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api, { rupee, today, thisMonth } from '../api.js';
-import { useApi, Spinner, Badge, EmployeeCell, Modal, Field, EmployeeSelect } from '../components/ui.jsx';
+import api from '../api.js';
+import { useApi, Spinner, Badge, EmployeeCell } from '../components/ui.jsx';
 import { CalendarCheck, Clock, Umbrella, ClipboardList, Users, UserCheck, UserX, Timer } from 'lucide-react';
 
 const QUICK = [
@@ -16,7 +15,6 @@ export default function Supervisor() {
   const nav = useNavigate();
   const dash = useApi('/analytics/dashboard');
   const leaves = useApi('/leaves?status=pending');
-  const [expOpen, setExpOpen] = useState(false);
 
   const approve = async (id, status) => { await api.put(`/leaves/${id}/status`, { status }); leaves.reload(); };
 
@@ -24,7 +22,6 @@ export default function Supervisor() {
     <div>
       <div className="page-head">
         <div><h1>Supervisor Desk</h1><p>Command center for daily workforce operations</p></div>
-        <button className="btn" onClick={() => setExpOpen(true)}>+ Quick Expense</button>
       </div>
 
       <div className="quick-actions" style={{ marginBottom: 18 }}>
@@ -75,33 +72,7 @@ export default function Supervisor() {
         )}
       </div>
 
-      {expOpen && <QuickExpense onClose={() => setExpOpen(false)} onSaved={() => { setExpOpen(false); dash.reload(); }} />}
     </div>
   );
 }
 
-function QuickExpense({ onClose, onSaved }) {
-  const [form, setForm] = useState({ date: today(), category: 'vegetables', amount: '', note: '' });
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    setSaving(true);
-    try { await api.post('/expenses', { ...form, created_by: 'Supervisor' }); onSaved(); }
-    finally { setSaving(false); }
-  };
-  return (
-    <Modal title="Quick Expense Entry" onClose={onClose}
-      footer={<>
-        <button className="btn gray" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={save} disabled={saving || !form.amount}>{saving ? 'Saving…' : 'Save'}</button>
-      </>}>
-      <div className="form-grid">
-        <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
-        <Field label="Category"><select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-          {['milk', 'vegetables', 'chicken', 'mutton', 'gas', 'misc'].map((c) => <option key={c} value={c}>{c}</option>)}
-        </select></Field>
-        <Field label="Amount (₹)"><input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} /></Field>
-        <Field label="Note"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
-      </div>
-    </Modal>
-  );
-}
