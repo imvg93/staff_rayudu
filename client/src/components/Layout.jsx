@@ -6,7 +6,7 @@ import {
   Users, CalendarCheck, Clock, Umbrella, ScrollText,
   Banknote, FileText, BarChart3, Landmark, AlertTriangle,
   FolderOpen, ClipboardList, Shirt, TrendingUp, DoorOpen,
-  LogOut, Menu,
+  LogOut, Menu, X,
 } from 'lucide-react';
 
 const NAV = [
@@ -18,7 +18,7 @@ const NAV = [
   { to: '/attendance', label: 'Attendance',         Icon: CalendarCheck, group: 'Workforce' },
   { to: '/shifts',     label: 'Shifts',             Icon: Clock,         group: 'Workforce' },
   { to: '/leaves',     label: 'Leave',              Icon: Umbrella,      group: 'Workforce' },
-  { to: '/timeline',   label: 'Employee Timeline',  Icon: ScrollText,    group: 'Workforce' },
+  { to: '/timeline',   label: 'Staff Profile',      Icon: ScrollText,    group: 'Workforce' },
 
   { to: '/payroll',       label: 'Payroll',           Icon: Banknote,      group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/salary-slip',   label: 'Salary Slip',       Icon: FileText,      group: 'Finance', roles: ['supervisor','admin','owner'] },
@@ -39,20 +39,32 @@ const TITLES = {
   '/salary-report': 'Salary Report',
 };
 
+const MOBILE_PRIMARY = ['/', '/staff', '/attendance', '/leaves', '/payroll'];
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const loc = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   if (!user) return <Navigate to="/login" replace />;
 
   const visible = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
   const groups = [...new Set(visible.map((n) => n.group))];
-  const title = TITLES[loc.pathname] || (loc.pathname.startsWith('/timeline') ? 'Employee Timeline' : 'Staff Management');
+  const title = TITLES[loc.pathname] || (loc.pathname.startsWith('/timeline') ? 'Staff Profile' : 'Staff Management');
   const initials = user.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const mobileTabs = MOBILE_PRIMARY
+    .map((to) => visible.find((n) => n.to === to))
+    .filter(Boolean);
+  const fallbackTab = visible.find((n) => n.to === '/documents');
+  const bottomTabs = mobileTabs.length >= 5 || !fallbackTab
+    ? mobileTabs.slice(0, 5)
+    : [...mobileTabs, fallbackTab].slice(0, 5);
 
   return (
     <div className="layout">
-      <aside className={`sidebar${collapsed ? ' sidebar-collapsed' : ''}`}>
+      {mobileNavOpen && <button className="mobile-nav-backdrop" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
+
+      <aside className={`sidebar${collapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' sidebar-mobile-open' : ''}`}>
         <div className="brand">
           <span className="crest">🪖</span>
           {!collapsed && (
@@ -61,6 +73,14 @@ export default function Layout() {
               <span>Military Hotel</span>
             </div>
           )}
+          <button
+            className="mobile-sidebar-close"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation"
+            title="Close menu"
+          >
+            <X size={17} strokeWidth={2} />
+          </button>
         </div>
 
         <nav className="nav">
@@ -68,7 +88,7 @@ export default function Layout() {
             <div key={g}>
               {!collapsed && <div className="group">{g}</div>}
               {visible.filter((n) => n.group === g).map(({ to, label, Icon }) => (
-                <NavLink key={to} to={to} end={to === '/'} title={collapsed ? label : ''} className="nav-link">
+                <NavLink key={to} to={to} end={to === '/'} title={collapsed ? label : ''} className="nav-link" onClick={() => setMobileNavOpen(false)}>
                   <span className="nav-icon"><Icon size={15} strokeWidth={1.8} /></span>
                   {!collapsed && <span className="nav-label">{label}</span>}
                 </NavLink>
@@ -102,7 +122,15 @@ export default function Layout() {
       <div className="main">
         <header className="topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <button className="sidebar-toggle" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <button
+              className="sidebar-toggle"
+              onClick={() => {
+                if (window.matchMedia('(max-width: 760px)').matches) setMobileNavOpen((open) => !open);
+                else setCollapsed((c) => !c);
+              }}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={mobileNavOpen}
+            >
               <Menu size={16} strokeWidth={1.8} color="var(--muted)" />
             </button>
             <h2>{title}</h2>
@@ -123,6 +151,15 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      <nav className="mobile-tabbar" aria-label="Primary navigation">
+        {bottomTabs.map(({ to, label, Icon }) => (
+          <NavLink key={to} to={to} end={to === '/'} className="mobile-tab">
+            <span className="mobile-tab-icon"><Icon size={19} strokeWidth={1.9} /></span>
+            <span>{label.replace(' Master', '').replace(' Management', '').replace(' Desk', '')}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

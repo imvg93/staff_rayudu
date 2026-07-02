@@ -71,7 +71,7 @@ function DailyGrid() {
         <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Attendance'}</button>
       </div>
       <div className="panel">
-        <div className="table-wrap">
+        <div className="table-wrap sticky-employee-table">
           <table className="data">
             <thead><tr><th>Employee</th><th>Dept</th><th>Mark</th><th>Late</th></tr></thead>
             <tbody>
@@ -140,7 +140,7 @@ function MonthlyReport() {
       </div>
       {!rows ? <Spinner /> : (
         <div className="panel">
-          <div className="table-wrap">
+          <div className="table-wrap sticky-employee-table">
             <table className="data">
               <thead>
                 <tr>

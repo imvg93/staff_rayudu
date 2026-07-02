@@ -43,12 +43,67 @@ router.get('/:employeeId', (req, res) => {
       SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,
       SUM(CASE WHEN status='absent' THEN 1 ELSE 0 END) AS absent,
       SUM(CASE WHEN status='half_day' THEN 1 ELSE 0 END) AS half_day,
-      SUM(CASE WHEN status='leave' THEN 1 ELSE 0 END) AS leave,
+      SUM(CASE WHEN status IN ('paid_leave','unpaid_leave') THEN 1 ELSE 0 END) AS leave,
+      SUM(CASE WHEN status='weekly_off' THEN 1 ELSE 0 END) AS weekly_off,
       SUM(CASE WHEN is_late=1 THEN 1 ELSE 0 END) AS late
     FROM attendance WHERE employee_id = ?
   `).get(id);
 
-  res.json({ employee, attendanceSummary: att, events });
+  const salaryHistory = db.prepare(`
+    SELECT month, base_salary, present_days, absent_days, extra_absent_days, half_days,
+           absence_deduction, half_day_deduction, advance_deduction, penalty_deduction,
+           overtime, bonus, food_deduction, other_deductions, manual_correction,
+           net_salary, status, approved_by, approved_at
+    FROM payroll
+    WHERE employee_id = ?
+    ORDER BY month DESC
+  `).all(id);
+
+  const salaryTotals = db.prepare(`
+    SELECT
+      COUNT(*) AS months_paid,
+      COALESCE(SUM(net_salary), 0) AS total_paid,
+      COALESCE(SUM(base_salary), 0) AS total_base,
+      COALESCE(SUM(absence_deduction + half_day_deduction + advance_deduction + penalty_deduction + food_deduction + other_deductions), 0) AS total_deductions,
+      COALESCE(SUM(overtime + bonus + manual_correction), 0) AS total_adjustments
+    FROM payroll
+    WHERE employee_id = ?
+  `).get(id);
+
+  const leaveSummary = db.prepare(`
+    SELECT status, COUNT(*) AS requests, COALESCE(SUM(days), 0) AS days
+    FROM leaves
+    WHERE employee_id = ?
+    GROUP BY status
+  `).all(id);
+
+  const advanceSummary = db.prepare(`
+    SELECT
+      COUNT(*) AS advances,
+      COALESCE(SUM(amount), 0) AS total_advanced,
+      COALESCE(SUM(balance), 0) AS balance
+    FROM advances
+    WHERE employee_id = ?
+  `).get(id);
+
+  const documentSummary = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END), 0) AS verified
+    FROM documents
+    WHERE employee_id = ?
+  `).get(id);
+
+  res.json({
+    employee,
+    attendanceSummary: att,
+    events,
+    salaryHistory,
+    salaryTotals,
+    leaveSummary,
+    advanceSummary,
+    documentSummary,
+  });
 });
 
 export default router;

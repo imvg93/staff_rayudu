@@ -8,6 +8,7 @@ const Dashboard    = lazy(() => import('./pages/Dashboard.jsx'));
 const Supervisor   = lazy(() => import('./pages/Supervisor.jsx'));
 const Celebrations = lazy(() => import('./pages/Celebrations.jsx'));
 const Staff        = lazy(() => import('./pages/Staff.jsx'));
+const StaffDetail  = lazy(() => import('./pages/StaffDetail.jsx'));
 const Attendance   = lazy(() => import('./pages/Attendance.jsx'));
 const Leaves       = lazy(() => import('./pages/Leaves.jsx'));
 const Payroll      = lazy(() => import('./pages/Payroll.jsx'));
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/supervisor" element={<Suspense fallback={fallback}><Supervisor /></Suspense>} />
         <Route path="/celebrations" element={<Suspense fallback={fallback}><Celebrations /></Suspense>} />
         <Route path="/staff" element={<Suspense fallback={fallback}><Staff /></Suspense>} />
+        <Route path="/staff/:id" element={<Suspense fallback={fallback}><StaffDetail /></Suspense>} />
         <Route path="/attendance" element={<Suspense fallback={fallback}><Attendance /></Suspense>} />
         <Route path="/shifts" element={<Suspense fallback={fallback}><Shifts /></Suspense>} />
         <Route path="/leaves" element={<Suspense fallback={fallback}><Leaves /></Suspense>} />

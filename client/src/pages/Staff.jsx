@@ -9,6 +9,25 @@ const blank = { name: '', department: 'Kitchen', designation: '', salary: 12000,
   phone: '', emergency_name: '', emergency_phone: '', joining_date: today(), dob: '', status: 'active',
   monthly_allowed_holidays: 4 };
 
+function monthLabel(month) {
+  if (!month) return '---';
+  return new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function serviceDuration(joiningDate) {
+  if (!joiningDate) return '---';
+  const start = new Date(joiningDate);
+  const now = new Date();
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth();
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) return 'New joiner';
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (years && rem) return `${years} yr ${rem} mo`;
+  if (years) return `${years} yr`;
+  return `${rem || 0} mo`;
+}
+
 export default function Staff() {
   const { user } = useAuth();
   const isSupervisor = user?.role === 'supervisor';
@@ -20,10 +39,22 @@ export default function Staff() {
   const [form, setForm] = useState(blank);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
   const fileRef = useRef(null);
 
   const openNew = () => { setForm(blank); setEditing({}); };
   const openEdit = (e) => { setForm({ ...e }); setEditing(e); };
+  const openView = async (e) => {
+    setViewing({ employee: e });
+    setViewLoading(true);
+    try {
+      const { data: profile } = await api.get(`/timeline/${e.id}`);
+      setViewing(profile);
+    } finally {
+      setViewLoading(false);
+    }
+  };
 
   const handlePhotoUpload = async (file) => {
     if (!file) return;
@@ -92,7 +123,7 @@ export default function Staff() {
                     <td><Badge value={e.status} /></td>
                     <td>
                       <div className="btn-row">
-                        <Link className="btn sm ghost" to={`/timeline/${e.id}`}>Timeline</Link>
+                        <Link className="btn sm ghost" to={`/staff/${e.id}`}>View</Link>
                         {!isSupervisor && (
                           <>
                             <button className="btn sm gray" onClick={() => openEdit(e)}>Edit</button>
@@ -150,6 +181,133 @@ export default function Staff() {
           </div>
         </Modal>
       )}
+
+      {viewing && (
+        <Modal
+          title={`Staff Details — ${viewing.employee?.name || ''}`}
+          onClose={() => setViewing(null)}
+          footer={<button className="btn gray" onClick={() => setViewing(null)}>Close</button>}
+        >
+          {viewLoading ? <Spinner /> : <StaffDetails profile={viewing} isSupervisor={isSupervisor} />}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function StaffDetails({ profile, isSupervisor }) {
+  const e = profile.employee || {};
+  const salaryHistory = profile.salaryHistory || [];
+  const att = profile.attendanceSummary || {};
+  const totals = profile.salaryTotals || {};
+  const docs = profile.documentSummary || {};
+  const advance = profile.advanceSummary || {};
+
+  return (
+    <div className="staff-detail">
+      <div className="staff-detail-hero">
+        <img
+          src={e.photo_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(e.name || 'Staff')}`}
+          alt=""
+        />
+        <div>
+          <h3>{e.name}</h3>
+          <p>{e.emp_code} · {e.department} · {e.designation || 'Staff'}</p>
+          <span className={`badge ${e.status}`}>{e.status}</span>
+        </div>
+      </div>
+
+      <div className="staff-detail-grid">
+        {[
+          ['Joined On', fmtDate(e.joining_date)],
+          ['Joined Month', monthLabel(e.joining_date?.slice(0, 7))],
+          ['Service', serviceDuration(e.joining_date)],
+          ['Shift', e.shift || '---'],
+          ['Current Salary', isSupervisor ? '---' : rupee(e.salary)],
+          ['Allowed Holidays', e.monthly_allowed_holidays ?? 0],
+          ['Phone', e.phone || '---'],
+          ['Emergency', e.emergency_phone || '---'],
+        ].map(([label, value]) => (
+          <div key={label} className="staff-detail-kv">
+            <span>{label}</span>
+            <b>{value}</b>
+          </div>
+        ))}
+      </div>
+
+      {!isSupervisor && (
+        <div className="staff-detail-stats">
+          {[
+            ['Months Paid', totals.months_paid || 0],
+            ['Total Salary Taken', rupee(totals.total_paid)],
+            ['Total Deductions', rupee(totals.total_deductions)],
+            ['Advance Balance', rupee(advance.balance)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <b>{value}</b>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="staff-detail-section">
+        <h4>Attendance Summary</h4>
+        <div className="staff-detail-pills">
+          {[
+            ['Present', att.present || 0, 'present'],
+            ['Absent', att.absent || 0, 'absent'],
+            ['Half Day', att.half_day || 0, 'half_day'],
+            ['Leave', att.leave || 0, 'leave'],
+            ['Weekly Off', att.weekly_off || 0, 'gray'],
+            ['Late', att.late || 0, 'late'],
+          ].map(([label, value, cls]) => (
+            <span key={label} className={`badge ${cls}`}>{label}: {value}</span>
+          ))}
+        </div>
+      </div>
+
+      {!isSupervisor && (
+        <div className="staff-detail-section">
+          <h4>Month-wise Salary Taken</h4>
+          {salaryHistory.length === 0 ? (
+            <div className="empty" style={{ padding: 18 }}>No salary records yet.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data staff-salary-mini">
+                <thead>
+                  <tr><th>Month</th><th>Base</th><th>Deductions</th><th>Net Taken</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {salaryHistory.map((s) => {
+                    const deductions = (s.absence_deduction || 0) + (s.half_day_deduction || 0) + (s.advance_deduction || 0) + (s.penalty_deduction || 0) + (s.food_deduction || 0) + (s.other_deductions || 0);
+                    return (
+                      <tr key={s.month}>
+                        <td><b>{monthLabel(s.month)}</b><small> P {s.present_days || 0} · A {s.absent_days || 0}</small></td>
+                        <td>{rupee(s.base_salary)}</td>
+                        <td style={{ color: '#DC2626' }}>{rupee(deductions)}</td>
+                        <td><b style={{ color: '#059669' }}>{rupee(s.net_salary)}</b></td>
+                        <td><Badge value={s.status} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="staff-detail-section">
+        <h4>Records</h4>
+        <div className="staff-detail-grid">
+          <div className="staff-detail-kv"><span>Documents Verified</span><b>{docs.verified || 0}/{docs.total || 0}</b></div>
+          <div className="staff-detail-kv"><span>Advance Records</span><b>{advance.advances || 0}</b></div>
+          {(profile.leaveSummary || []).map((l) => (
+            <div key={l.status} className="staff-detail-kv"><span>{l.status} Leave</span><b>{l.days || 0} day(s)</b></div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

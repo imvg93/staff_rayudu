@@ -715,7 +715,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Section 1: KPI Grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         {KPI.slice(0, 5).map((cfg) => (
           <KpiCard key={cfg.key} cfg={cfg} value={data[cfg.key]} data={data} />
         ))}

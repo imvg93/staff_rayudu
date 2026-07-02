@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import api, { rupee, fmtDate } from '../api.js';
 import { useApi, Spinner } from '../components/ui.jsx';
 
@@ -25,6 +25,25 @@ const WHAT_IT_TRACKS = [
   { type: 'promotion', desc: 'Designation changes with salary before & after' },
   { type: 'exit',      desc: 'Exit date, reason & settlement amount' },
 ];
+
+function monthLabel(month) {
+  if (!month) return '---';
+  return new Date(month + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+}
+
+function serviceDuration(joiningDate) {
+  if (!joiningDate) return '---';
+  const start = new Date(joiningDate);
+  const now = new Date();
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth();
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) return 'New joiner';
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (years && rem) return `${years} yr ${rem} mo`;
+  if (years) return `${years} yr`;
+  return `${rem || 0} mo`;
+}
 
 export default function Timeline() {
   const { id } = useParams();
@@ -53,8 +72,8 @@ export default function Timeline() {
     <div>
       <div className="page-head">
         <div>
-          <h1>Employee Timeline</h1>
-          <p>Complete journey of a staff member — from joining to today</p>
+          <h1>Staff Profile</h1>
+          <p>Complete staff record: joining, attendance, salary, documents and history</p>
         </div>
       </div>
 
@@ -233,14 +252,89 @@ export default function Timeline() {
               <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
                   { label: 'Employee Code', value: data.employee.emp_code },
-                  { label: 'Monthly Salary', value: rupee(data.employee.salary), bold: true, color: '#7C3AED' },
+                  { label: 'Current Salary', value: rupee(data.employee.salary), bold: true, color: '#7C3AED' },
                   { label: 'Joined On', value: fmtDate(data.employee.joining_date) },
+                  { label: 'Joined Month', value: monthLabel(data.employee.joining_date?.slice(0, 7)) },
+                  { label: 'Service', value: serviceDuration(data.employee.joining_date) },
                   { label: 'Phone', value: data.employee.phone || '—' },
                   { label: 'Status', value: data.employee.status === 'active' ? '✅ Active' : '⛔ Inactive' },
                 ].map((r) => (
                   <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F8FAFC' }}>
                     <span style={{ fontSize: 12, color: '#94A3B8' }}>{r.label}</span>
                     <span style={{ fontSize: 12.5, fontWeight: r.bold ? 700 : 500, color: r.color || '#0F172A' }}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick actions */}
+            <div className="panel">
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Open Related Module</span>
+              </div>
+              <div style={{ padding: '12px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { to: '/attendance', label: 'Attendance' },
+                  { to: '/payroll', label: 'Payroll' },
+                  { to: '/salary-slip', label: 'Salary Slip' },
+                  { to: '/documents', label: 'Documents' },
+                ].map((a) => (
+                  <Link key={a.to} to={a.to} className="btn sm gray" style={{ justifyContent: 'center' }}>
+                    {a.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Salary overview */}
+            <div className="panel">
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Salary Overview</span>
+              </div>
+              <div style={{ padding: '12px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { label: 'Months Paid', value: data.salaryTotals?.months_paid || 0, color: '#2563EB', bg: '#EFF6FF' },
+                  { label: 'Total Taken', value: rupee(data.salaryTotals?.total_paid), color: '#059669', bg: '#F0FDF4' },
+                  { label: 'Deductions', value: rupee(data.salaryTotals?.total_deductions), color: '#DC2626', bg: '#FEF2F2' },
+                  { label: 'Adv Balance', value: rupee(data.advanceSummary?.balance), color: '#D97706', bg: '#FFFBEB' },
+                ].map((s) => (
+                  <div key={s.label} style={{ padding: '10px 12px', borderRadius: 10, background: s.bg }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: s.color, lineHeight: 1.15 }}>{s.value}</div>
+                    <div style={{ fontSize: 10.5, color: s.color + 'aa', marginTop: 3, fontWeight: 600 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Month-wise salary */}
+            <div className="panel">
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Month-wise Salary</span>
+                <span style={{ fontSize: 11, color: '#94A3B8' }}>{data.salaryHistory?.length || 0} month(s)</span>
+              </div>
+              <div style={{ padding: '10px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {!data.salaryHistory?.length ? (
+                  <div style={{ padding: '12px 0', color: '#94A3B8', fontSize: 12.5, textAlign: 'center' }}>
+                    No salary records yet
+                  </div>
+                ) : data.salaryHistory.slice(0, 8).map((s) => (
+                  <div key={s.month} style={{ border: '1px solid #F1F5F9', borderRadius: 10, padding: '10px 11px', background: '#fff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{monthLabel(s.month)}</div>
+                        <div style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 2 }}>
+                          Present {s.present_days || 0} | Absent {s.absent_days || 0} | Half {s.half_days || 0}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#059669' }}>{rupee(s.net_salary)}</div>
+                        <div style={{ fontSize: 10.5, color: '#64748B', textTransform: 'capitalize' }}>{s.status}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #F8FAFC', fontSize: 11.5 }}>
+                      <span style={{ color: '#64748B' }}>Base {rupee(s.base_salary)}</span>
+                      <span style={{ color: '#DC2626' }}>Ded {rupee((s.absence_deduction || 0) + (s.half_day_deduction || 0) + (s.advance_deduction || 0) + (s.penalty_deduction || 0))}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -257,6 +351,7 @@ export default function Timeline() {
                   { label: 'Absent',       value: data.attendanceSummary.absent,   color: '#DC2626', bg: '#FEF2F2' },
                   { label: 'Half-day',     value: data.attendanceSummary.half_day, color: '#D97706', bg: '#FFFBEB' },
                   { label: 'On Leave',     value: data.attendanceSummary.leave,    color: '#2563EB', bg: '#EFF6FF' },
+                  { label: 'Weekly Off',    value: data.attendanceSummary.weekly_off, color: '#0F766E', bg: '#ECFDF5' },
                   { label: 'Late Entries', value: data.attendanceSummary.late,     color: '#7C3AED', bg: '#F5F3FF' },
                 ].map((r) => (
                   <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -269,9 +364,33 @@ export default function Timeline() {
               </div>
             </div>
 
+            {/* Records summary */}
+            <div className="panel">
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #F1F5F9' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>Records Summary</span>
+              </div>
+              <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                  <span style={{ color: '#64748B' }}>Documents Verified</span>
+                  <b style={{ color: '#059669' }}>{data.documentSummary?.verified || 0}/{data.documentSummary?.total || 0}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                  <span style={{ color: '#64748B' }}>Advance Records</span>
+                  <b style={{ color: '#D97706' }}>{data.advanceSummary?.advances || 0}</b>
+                </div>
+                {(data.leaveSummary || []).map((l) => (
+                  <div key={l.status} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                    <span style={{ color: '#64748B', textTransform: 'capitalize' }}>{l.status} Leave</span>
+                    <b style={{ color: '#2563EB' }}>{l.days || 0} day(s)</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       )}
     </div>
   );
 }
+
