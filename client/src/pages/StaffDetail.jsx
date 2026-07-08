@@ -113,6 +113,7 @@ export default function StaffDetail() {
               ['Half Day', att.half_day || 0, 'half_day'],
               ['Leave', att.leave || 0, 'leave'],
               ['Weekly Off', att.weekly_off || 0, 'gray'],
+              ['Holiday', att.holiday || 0, 'leave'],
               ['Late', att.late || 0, 'late'],
             ].map(([label, value, cls]) => (
               <span key={label} className={`badge ${cls}`}>{label}: {value}</span>

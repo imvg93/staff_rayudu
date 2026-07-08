@@ -21,7 +21,7 @@ export default function Payroll() {
   return (
     <div>
       <div className="page-head">
-        <div><h1>Payroll Management</h1><p>Attendance-based salary: base − absence deduction − advance − penalty = net</p></div>
+        <div><h1>Payroll Management</h1><p>Attendance-based salary: base + unused week-off pay − absence − advance − penalty = net</p></div>
         <div className="btn-row">
           <button className={`btn sm ${tab === 'payroll' ? '' : 'gray'}`} onClick={() => setTab('payroll')}>Monthly Payroll</button>
           <button className={`btn sm ${tab === 'history' ? '' : 'gray'}`} onClick={() => setTab('history')}>Salary History</button>
@@ -123,10 +123,11 @@ function MonthlyPayroll() {
   const totals = (rows || []).reduce((t, r) => ({
     base: t.base + (r.base_salary || 0),
     absenceDed: t.absenceDed + (r.absence_deduction || 0),
+    extraPay: t.extraPay + (r.extra_day_pay || 0),
     adv: t.adv + (r.advance_deduction || 0),
     pen: t.pen + (r.penalty_deduction || 0),
     net: t.net + (r.net_salary || 0),
-  }), { base: 0, absenceDed: 0, adv: 0, pen: 0, net: 0 });
+  }), { base: 0, absenceDed: 0, extraPay: 0, adv: 0, pen: 0, net: 0 });
 
   return (
     <>
@@ -167,9 +168,8 @@ function MonthlyPayroll() {
                     <th>Base</th>
                     <th title="Per Day Salary">₹/Day</th>
                     <th title="Total Absent Days">Absent</th>
-                    <th title="Extra Absent (beyond quota)">Extra</th>
                     <th style={{ color: '#c0392b' }} title="Absence Deduction">Abs.Ded.</th>
-                    <th style={{ color: '#c8860d' }} title="Half-Day Deduction">H.Day</th>
+                    <th style={{ color: '#2e7d32' }} title="Unused week-offs paid as extra worked days">Extra Pay</th>
                     <th style={{ color: '#bc6c25' }}>Advance</th>
                     <th style={{ color: '#c0392b' }}>Penalty</th>
                     <th><b style={{ color: '#2e7d32' }}>Net</b></th>
@@ -184,9 +184,8 @@ function MonthlyPayroll() {
                       <td>{rupee(r.base_salary)}</td>
                       <td style={{ color: '#6b7a72' }}>{rupee(r.per_day_salary || Math.round(r.base_salary / (r.total_days_in_month || 30)))}</td>
                       <td>{r.absent_days || 0}</td>
-                      <td style={{ color: r.extra_absent_days > 0 ? '#c0392b' : '#6b7a72' }}>{r.extra_absent_days || 0}</td>
                       <td style={{ color: '#c0392b' }}>{r.absence_deduction > 0 ? `− ${rupee(r.absence_deduction)}` : '—'}</td>
-                      <td style={{ color: '#c8860d' }}>{r.half_day_deduction > 0 ? `− ${rupee(r.half_day_deduction)}` : '—'}</td>
+                      <td style={{ color: '#2e7d32' }} title={r.extra_off_days ? `${r.extra_off_days} unused week-off day(s) paid` : ''}>{r.extra_day_pay > 0 ? `+ ${rupee(r.extra_day_pay)}${r.extra_off_days ? ` (${r.extra_off_days}d)` : ''}` : '—'}</td>
                       <td style={{ color: '#bc6c25' }}>{r.advance_deduction > 0 ? `− ${rupee(r.advance_deduction)}` : '—'}</td>
                       <td style={{ color: '#c0392b' }}>{r.penalty_deduction > 0 ? `− ${rupee(r.penalty_deduction)}` : '—'}</td>
                       <td>
@@ -223,9 +222,9 @@ function MonthlyPayroll() {
                   <tr style={{ background: '#f5f7f5', fontWeight: 700 }}>
                     <td>TOTAL</td>
                     <td>{rupee(totals.base)}</td>
-                    <td></td><td></td><td></td>
+                    <td></td><td></td>
                     <td style={{ color: '#c0392b' }}>{totals.absenceDed > 0 ? `− ${rupee(totals.absenceDed)}` : '—'}</td>
-                    <td></td>
+                    <td style={{ color: '#2e7d32' }}>{totals.extraPay > 0 ? `+ ${rupee(totals.extraPay)}` : '—'}</td>
                     <td style={{ color: '#bc6c25' }}>{totals.adv > 0 ? `− ${rupee(totals.adv)}` : '—'}</td>
                     <td style={{ color: '#c0392b' }}>{totals.pen > 0 ? `− ${rupee(totals.pen)}` : '—'}</td>
                     <td><b style={{ color: '#2e7d32' }}>{rupee(totals.net)}</b></td>
@@ -296,6 +295,8 @@ function MonthlyPayroll() {
 
 function AdjTags({ row: r }) {
   const tags = [];
+  if ((r.extra_day_pay || 0) > 0)
+    tags.push({ label: `Extra ${r.extra_off_days || 0}d +${rupee(r.extra_day_pay)}`, bg: '#e6f4ea', color: '#2e7d32' });
   if ((r.overtime || 0) > 0)
     tags.push({ label: `OT +${rupee(r.overtime)}`, bg: '#e8f0f8', color: '#2c6e9b' });
   if ((r.bonus || 0) > 0)

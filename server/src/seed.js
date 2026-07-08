@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import db, { SCHEMA } from './db.js';
+import { makeToken } from './reviewEngine.js';
 
 // ---- helpers ---------------------------------------------------------------
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -19,7 +20,7 @@ const thisYear = (mm, dd) => `${today.getFullYear()}-${String(mm).padStart(2, '0
 const monthKey = (d = today) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 console.log('Resetting database…');
-const tables = ['payroll','attendance','shifts','leaves','advances','penalties',
+const tables = ['review_notifications','reviews','payroll','attendance','shifts','leaves','advances','penalties',
   'documents','performance_notes','assets','exits','promotions','employees','users'];
 db.exec('PRAGMA foreign_keys = OFF;');
 for (const t of tables) db.exec(`DROP TABLE IF EXISTS ${t};`);
@@ -56,9 +57,11 @@ const employees = [
   ['Shankar',           'Dining Service', 'Waiter',             12500, 'morning', thisYear(8, 27), '1992-06-08'],
 ];
 
+const BRANCHES = ['Ameerpet (Main)', 'Kukatpally', 'Dilsukhnagar'];
+
 const insEmp = db.prepare(`INSERT INTO employees
-  (emp_code,name,photo_url,department,designation,joining_date,salary,shift,phone,emergency_name,emergency_phone,dob,status,monthly_allowed_holidays)
-  VALUES (@emp_code,@name,@photo_url,@department,@designation,@joining_date,@salary,@shift,@phone,@emergency_name,@emergency_phone,@dob,@status,@monthly_allowed_holidays)`);
+  (emp_code,name,photo_url,department,designation,joining_date,salary,shift,phone,emergency_name,emergency_phone,dob,status,monthly_allowed_holidays,branch,qr_token)
+  VALUES (@emp_code,@name,@photo_url,@department,@designation,@joining_date,@salary,@shift,@phone,@emergency_name,@emergency_phone,@dob,@status,@monthly_allowed_holidays,@branch,@qr_token)`);
 
 const empIds = [];
 employees.forEach((e, i) => {
@@ -78,7 +81,9 @@ employees.forEach((e, i) => {
     emergency_phone: '90' + String(100000000 + i * 211733).slice(0, 8),
     dob,
     status: 'active',
-    monthly_allowed_holidays: 0,
+    monthly_allowed_holidays: 4,
+    branch: BRANCHES[i % BRANCHES.length],
+    qr_token: makeToken(),
   });
   empIds.push(info.lastInsertRowid);
 });
@@ -99,6 +104,8 @@ const exitedInfo = insEmp.run({
   dob: '1990-02-14',
   status: 'exited',
   monthly_allowed_holidays: 0,
+  branch: BRANCHES[0],
+  qr_token: makeToken(),
 });
 const exitedId = exitedInfo.lastInsertRowid;
 
@@ -145,6 +152,16 @@ insExtraAtt.run(empIds[0], `${curMonth}-05`, 'paid_leave', 'Approved PL');
 insExtraAtt.run(empIds[3], `${curMonth}-07`, 'unpaid_leave', 'Unpaid leave taken');
 insExtraAtt.run(empIds[5], `${curMonth}-04`, 'weekly_off', 'Weekly off');
 insExtraAtt.run(empIds[5], `${curMonth}-11`, 'weekly_off', 'Weekly off');
+
+// company-wide festival holiday — PAID, must never be deducted from salary
+const holidayDate = `${curMonth}-06`;
+const insHoliday = db.prepare(`
+  INSERT INTO attendance (employee_id,date,status,check_in,is_late,remarks)
+  VALUES (?,?,'holiday',null,0,'Festival holiday')
+  ON CONFLICT(employee_id,date) DO UPDATE SET
+    status='holiday', check_in=null, is_late=0, remarks='Festival holiday'
+`);
+empIds.forEach((id) => insHoliday.run(id, holidayDate));
 
 // ---- shifts (next 7 days) --------------------------------------------------
 const insShift = db.prepare('INSERT INTO shifts (employee_id,date,shift_type,department) VALUES (?,?,?,?)');
@@ -210,43 +227,63 @@ const prev = new Date(today);
 prev.setMonth(prev.getMonth() - 1);
 const prevMonthKey = monthKey(prev);
 const prevTotalDays = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate();
+const ALLOWED_OFFS = 4; // monthly week-off entitlement
+
+// Give most staff their 4 week-offs last month (days 6/13/20/27 → no extra pay).
+// Showcase: emp[2] took only 2 (→ 2 extra days paid), emp[8] took 0 (→ 4 extra days paid).
+const insOff = db.prepare(`
+  INSERT OR IGNORE INTO attendance (employee_id,date,status,check_in,is_late,remarks)
+  VALUES (?,?,'weekly_off',null,0,'Weekly off')
+`);
+empIds.forEach((id, i) => {
+  const offsTaken = i === 2 ? 2 : i === 8 ? 0 : 4;
+  [6, 13, 20, 27].slice(0, offsTaken).forEach((d) => {
+    insOff.run(id, `${prevMonthKey}-${String(d).padStart(2, '0')}`);
+  });
+});
 
 const getAtt = db.prepare(`
   SELECT
     SUM(CASE WHEN status='absent' OR status='unpaid_leave' THEN 1 ELSE 0 END) AS absent,
     SUM(CASE WHEN status='half_day' THEN 1 ELSE 0 END) AS half_day,
+    SUM(CASE WHEN status='weekly_off' THEN 1 ELSE 0 END) AS weekly_off,
     SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present
   FROM attendance WHERE employee_id=? AND substr(date,1,7)=?
 `);
 const insPay = db.prepare(`INSERT OR IGNORE INTO payroll
   (employee_id,month,base_salary,total_days_in_month,allowed_holidays,present_days,absent_days,
-   extra_absent_days,half_days,per_day_salary,absence_deduction,half_day_deduction,
+   extra_absent_days,half_days,weekly_off_days,extra_off_days,extra_day_pay,
+   per_day_salary,absence_deduction,half_day_deduction,
    overtime,bonus,advance_deduction,penalty_deduction,food_deduction,other_deductions,
    manual_correction,net_salary,status)
   VALUES (@employee_id,@month,@base_salary,@total_days_in_month,@allowed_holidays,@present_days,@absent_days,
-   @extra_absent_days,@half_days,@per_day_salary,@absence_deduction,@half_day_deduction,
+   @extra_absent_days,@half_days,@weekly_off_days,@extra_off_days,@extra_day_pay,
+   @per_day_salary,@absence_deduction,@half_day_deduction,
    @overtime,@bonus,@advance_deduction,@penalty_deduction,@food_deduction,@other_deductions,
    @manual_correction,@net_salary,@status)`);
 
 empIds.forEach((id, i) => {
   const base = employees[i][3];
   const perDay = Math.round((base / prevTotalDays) * 100) / 100;
-  const allowed = 0; // every absent day deducts
   const att = getAtt.get(id, prevMonthKey) || {};
   const absentDays = att.absent || 0;
   const halfDays = att.half_day || 0;
   const presentDays = att.present || 0;
-  const extra = Math.max(0, absentDays - allowed); // = absentDays when allowed=0
-  const absenceDed = Math.round(perDay * extra);
+  const weeklyOff = att.weekly_off || 0;
+  const absenceDed = Math.round(perDay * absentDays); // every absent day deducts
   const halfDed = Math.round(perDay * 0.5 * halfDays);
+  const extraOffDays = Math.max(0, ALLOWED_OFFS - weeklyOff); // unused week-offs → extra pay
+  const extraDayPay = Math.round(perDay * extraOffDays);
   const advDed = [0, 2, 8, 11].includes(i) ? 1000 : 0;
   const penDed = [2, 5, 14].includes(i) ? (i === 2 ? 500 : 300) : 0;
-  const net = Math.round(base - absenceDed - halfDed - advDed - penDed);
+  const net = Math.round(base + extraDayPay - absenceDed - halfDed - advDed - penDed);
   insPay.run({
     employee_id: id, month: prevMonthKey, base_salary: base,
-    total_days_in_month: prevTotalDays, allowed_holidays: allowed,
-    present_days: presentDays, absent_days: absentDays, extra_absent_days: extra,
-    half_days: halfDays, per_day_salary: perDay,
+    total_days_in_month: prevTotalDays, allowed_holidays: ALLOWED_OFFS,
+    present_days: presentDays, absent_days: absentDays, extra_absent_days: absentDays,
+    half_days: halfDays, weekly_off_days: weeklyOff,
+    extra_off_days: extraOffDays, extra_day_pay: extraDayPay,
+    per_day_salary: perDay,
     absence_deduction: absenceDed, half_day_deduction: halfDed,
     overtime: 0, bonus: 0, advance_deduction: advDed, penalty_deduction: penDed,
     food_deduction: 0, other_deductions: 0, manual_correction: 0,
@@ -268,8 +305,132 @@ db.prepare(`INSERT INTO exits
   VALUES (?,?,?,?,?,?,?)`)
   .run(exitedId, daysAgo(45), daysAgo(30), 'Relocating to hometown', 15, 8500, 'settled');
 
+// ---- customer reviews ------------------------------------------------------
+// Deterministic PRNG so the demo dataset is stable across reseeds.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20260708);
+const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+const gauss = () => rnd() + rnd() + rnd() - 1.5; // ~mean 0
+
+const COMMENTS = {
+  pos: [
+    'Excellent service, very polite and attentive throughout.',
+    'Food was served hot and fresh. Staff was very friendly.',
+    'Quick service and a warm smile. Highly recommended!',
+    'Very professional and helpful. Made our visit pleasant.',
+    'Great experience, handled our large order smoothly.',
+    'Courteous and quick. Will definitely come back.',
+    'Neat, well-mannered and knew the menu very well.',
+    'Handled a rush hour calmly and served us on time.',
+    '', '', '',
+  ],
+  neu: [
+    'Service was okay, but a little slow during the rush.',
+    'Average experience, nothing special.',
+    'Decent service, could improve on response time.',
+    'Food was fine, service could be a bit quicker.',
+    '', '',
+  ],
+  neg: [
+    'Waited too long to get served.',
+    'Staff seemed distracted and not very attentive.',
+    'Order was mixed up and took time to correct.',
+    'Not very responsive, had to ask twice.',
+    'Service felt rushed and impersonal.',
+    '',
+  ],
+};
+const CUST_NAMES = ['Ramesh', 'Sunitha', 'Ali', 'Priya', 'Vamsi', 'Anitha', 'Kishore',
+  'Deepa', 'Rahul', 'Swathi', 'Imran', 'Divya', 'Naveen', 'Lavanya', 'Karthik', 'Sneha'];
+
+const insReview = db.prepare(`INSERT INTO reviews
+  (employee_id,overall_rating,professionalism,communication,knowledge,friendliness,
+   response_time,overall_experience,comment,recommend,customer_name,customer_mobile,
+   customer_email,status,created_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+
+const reviewDateTime = (n) => {
+  const d = new Date(today);
+  d.setDate(d.getDate() - n);
+  d.setHours(9 + Math.floor(rnd() * 13), Math.floor(rnd() * 60), 0, 0);
+  return d.toISOString();
+};
+const clampR = (v) => Math.max(1, Math.min(5, v));
+const near = (base) => clampR(base + (rnd() < 0.55 ? 0 : (rnd() < 0.5 ? -1 : 1)));
+
+// Per-employee quality profile → produces a realistic spread of top / mid / low performers.
+const TARGETS = [4.9, 4.8, 4.6, 4.7, 4.5, 4.3, 4.4, 4.75, 4.85, 4.2, 4.35, 3.6, 4.1, 3.9, 4.0, 4.55, 3.4, 4.25];
+
+let reviewCount = 0;
+empIds.forEach((id, i) => {
+  const target = TARGETS[i] ?? 4.3;
+  const count = 18 + Math.floor(rnd() * 22); // 18–39 reviews each
+  for (let k = 0; k < count; k++) {
+    const overall = clampR(Math.round(target + gauss() * 0.7));
+    const daysBack = Math.floor(rnd() * 180); // last ~6 months
+    const recommend = overall >= 4 ? 1 : overall === 3 ? (rnd() < 0.5 ? 1 : 0) : 0;
+    const bucket = overall >= 4 ? COMMENTS.pos : overall === 3 ? COMMENTS.neu : COMMENTS.neg;
+    const hasCust = rnd() < 0.5;
+    // occasional moderation states
+    let status = 'verified';
+    const roll = rnd();
+    if (overall <= 2 && roll < 0.15) status = 'flagged';
+    else if (roll < 0.015) status = 'hidden'; // rare spam
+
+    insReview.run(
+      id, overall,
+      near(overall), near(overall), near(overall), near(overall), near(overall), near(overall),
+      pick(bucket) || null,
+      recommend,
+      hasCust ? pick(CUST_NAMES) : null,
+      hasCust ? '9' + String(800000000 + Math.floor(rnd() * 99999999)).slice(0, 9) : null,
+      hasCust && rnd() < 0.4 ? `${pick(CUST_NAMES).toLowerCase()}${Math.floor(rnd() * 90 + 10)}@gmail.com` : null,
+      status,
+      reviewDateTime(daysBack),
+    );
+    reviewCount++;
+  }
+});
+
+// ---- review notifications (recent activity feed) ---------------------------
+const insNotif = db.prepare(`INSERT INTO review_notifications
+  (type,employee_id,review_id,title,message,severity,is_read,created_at)
+  VALUES (?,?,?,?,?,?,?,?)`);
+const recentReviews = db.prepare(`
+  SELECT r.id, r.employee_id, r.overall_rating, r.created_at, e.name
+  FROM reviews r JOIN employees e ON e.id=r.employee_id
+  WHERE r.status!='hidden' ORDER BY r.created_at DESC LIMIT 12
+`).all();
+recentReviews.forEach((r, idx) => {
+  insNotif.run('new_review', r.employee_id, r.id, 'New review received',
+    `${r.name} received a ${r.overall_rating}★ review.`, 'info', idx > 3 ? 1 : 0, r.created_at);
+  if (r.overall_rating <= 2) {
+    insNotif.run('low_rating', r.employee_id, r.id, 'Low rating alert',
+      `${r.name} received a ${r.overall_rating}★ review — needs attention.`, 'alert', 0, r.created_at);
+  }
+});
+// A milestone notification for the current top performer.
+const topEmp = db.prepare(`
+  SELECT e.id, e.name, COUNT(*) n, ROUND(AVG(r.overall_rating),2) avg
+  FROM reviews r JOIN employees e ON e.id=r.employee_id
+  WHERE r.status!='hidden' GROUP BY e.id HAVING n>=15 ORDER BY avg DESC LIMIT 1
+`).get();
+if (topEmp) {
+  insNotif.run('milestone', topEmp.id, null, 'Bonus milestone reached',
+    `${topEmp.name} qualified for a performance bonus (avg ${topEmp.avg}★ over ${topEmp.n} reviews).`,
+    'success', 0, reviewDateTime(1));
+}
+
 console.log('Seed complete.');
 console.log('  Employees:', empIds.length + 1, '(1 exited)');
+console.log('  Reviews:', reviewCount);
 console.log('  Login accounts:');
 console.log('    Owner      -> owner@rayudu.com / owner123');
 console.log('    Admin      -> admin@rayudu.com / admin123');

@@ -1,0 +1,14 @@
+{
+  "name": "rgm-staff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rayudu Gari Military Hotel — Staff Management (root scripts)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "db:setup": "npm --prefix server run db:setup",
+    "build": "npm --prefix client run build",
+    "start": "npm run build && npm --prefix server start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  }
+}

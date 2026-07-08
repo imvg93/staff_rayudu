@@ -45,6 +45,7 @@ router.get('/:employeeId', (req, res) => {
       SUM(CASE WHEN status='half_day' THEN 1 ELSE 0 END) AS half_day,
       SUM(CASE WHEN status IN ('paid_leave','unpaid_leave') THEN 1 ELSE 0 END) AS leave,
       SUM(CASE WHEN status='weekly_off' THEN 1 ELSE 0 END) AS weekly_off,
+      SUM(CASE WHEN status='holiday' THEN 1 ELSE 0 END) AS holiday,
       SUM(CASE WHEN is_late=1 THEN 1 ELSE 0 END) AS late
     FROM attendance WHERE employee_id = ?
   `).get(id);
@@ -65,7 +66,7 @@ router.get('/:employeeId', (req, res) => {
       COALESCE(SUM(net_salary), 0) AS total_paid,
       COALESCE(SUM(base_salary), 0) AS total_base,
       COALESCE(SUM(absence_deduction + half_day_deduction + advance_deduction + penalty_deduction + food_deduction + other_deductions), 0) AS total_deductions,
-      COALESCE(SUM(overtime + bonus + manual_correction), 0) AS total_adjustments
+      COALESCE(SUM(extra_day_pay + overtime + bonus + manual_correction), 0) AS total_adjustments
     FROM payroll
     WHERE employee_id = ?
   `).get(id);

@@ -9,6 +9,7 @@ const STATUSES = [
   { v: 'absent',       label: 'A',   cls: 'absent',   title: 'Absent' },
   { v: 'half_day',     label: 'H',   cls: 'half_day', title: 'Half Day' },
   { v: 'weekly_off',   label: 'W/O', cls: 'leave',    title: 'Weekly Off' },
+  { v: 'holiday',      label: 'HOL', cls: 'leave',    title: 'Holiday (paid — no deduction)' },
   { v: 'paid_leave',   label: 'PL',  cls: 'leave',    title: 'Paid Leave' },
   { v: 'unpaid_leave', label: 'UL',  cls: 'absent',   title: 'Unpaid Leave' },
 ];
@@ -88,6 +89,7 @@ function DailyGrid() {
                             className={`btn sm ${m.status === s.v ? '' : 'gray'}`}
                             style={m.status === s.v && s.v === 'absent' ? { background: '#c0392b' }
                               : m.status === s.v && s.v === 'unpaid_leave' ? { background: '#e65c00' }
+                              : m.status === s.v && s.v === 'holiday' ? { background: '#0f766e' }
                               : m.status === s.v && (s.v === 'weekly_off' || s.v === 'paid_leave') ? { background: '#2c6e9b' }
                               : {}}
                             onClick={() => setStatus(r.employee_id, s.v)}>{s.label}</button>
@@ -107,7 +109,7 @@ function DailyGrid() {
         </div>
       </div>
       <p style={{ color: '#6b7a72', fontSize: 12, marginTop: 10 }}>
-        P = Present · A = Absent · H = Half-day · W/O = Weekly Off · PL = Paid Leave · UL = Unpaid Leave
+        P = Present · A = Absent · H = Half-day · W/O = Weekly Off · HOL = Holiday (paid) · PL = Paid Leave · UL = Unpaid Leave
       </p>
     </div>
   );
@@ -123,10 +125,11 @@ function MonthlyReport() {
     absent: t.absent + (r.absent || 0),
     half_day: t.half_day + (r.half_day || 0),
     weekly_off: t.weekly_off + (r.weekly_off || 0),
+    holiday: t.holiday + (r.holiday || 0),
     paid_leave: t.paid_leave + (r.paid_leave || 0),
     unpaid_leave: t.unpaid_leave + (r.unpaid_leave || 0),
     late: t.late + (r.late || 0),
-  }), { present: 0, absent: 0, half_day: 0, weekly_off: 0, paid_leave: 0, unpaid_leave: 0, late: 0 });
+  }), { present: 0, absent: 0, half_day: 0, weekly_off: 0, holiday: 0, paid_leave: 0, unpaid_leave: 0, late: 0 });
 
   return (
     <div>
@@ -149,6 +152,7 @@ function MonthlyReport() {
                   <th style={{ color: '#c0392b' }}>Absent</th>
                   <th style={{ color: '#c8860d' }}>Half-day</th>
                   <th style={{ color: '#2c6e9b' }}>W/Off</th>
+                  <th style={{ color: '#0f766e' }}>Holiday</th>
                   <th style={{ color: '#2c6e9b' }}>PL</th>
                   <th style={{ color: '#e65c00' }}>UL</th>
                   <th>Allowed Holidays</th>
@@ -163,6 +167,7 @@ function MonthlyReport() {
                     <td><b style={{ color: '#c0392b' }}>{r.absent || 0}</b></td>
                     <td>{r.half_day || 0}</td>
                     <td style={{ color: '#2c6e9b' }}>{r.weekly_off || 0}</td>
+                    <td style={{ color: '#0f766e' }}>{r.holiday || 0}</td>
                     <td style={{ color: '#2c6e9b' }}>{r.paid_leave || 0}</td>
                     <td style={{ color: r.unpaid_leave > 0 ? '#e65c00' : undefined }}>{r.unpaid_leave || 0}</td>
                     <td style={{ color: '#6b7a72' }}>{r.monthly_allowed_holidays ?? 4}</td>
@@ -175,6 +180,7 @@ function MonthlyReport() {
                   <td style={{ color: '#c0392b' }}>{totals.absent}</td>
                   <td>{totals.half_day}</td>
                   <td style={{ color: '#2c6e9b' }}>{totals.weekly_off}</td>
+                  <td style={{ color: '#0f766e' }}>{totals.holiday}</td>
                   <td style={{ color: '#2c6e9b' }}>{totals.paid_leave}</td>
                   <td style={{ color: '#e65c00' }}>{totals.unpaid_leave}</td>
                   <td></td>

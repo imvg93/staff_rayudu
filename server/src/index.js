@@ -16,6 +16,9 @@ import payrollRoutes from './routes/payroll.js';
 import leavesRoutes from './routes/leaves.js';
 import timelineRoutes from './routes/timeline.js';
 import analyticsRoutes from './routes/analytics.js';
+import reviewsRoutes from './routes/reviews.js';
+import notificationsRoutes from './routes/notifications.js';
+import publicRoutes from './routes/public.js';
 
 dotenv.config();
 
@@ -57,6 +60,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, service: 'RGM Staff AP
 
 // public
 app.use('/api/auth', authRoutes);
+app.use('/api/public', publicRoutes); // customer review form — no auth (QR scan)
 
 // everything below requires a valid session
 app.use('/api', auth);
@@ -67,6 +71,8 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/leaves', leavesRoutes);
 app.use('/api/timeline', timelineRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // simple CRUD modules
 app.use('/api/shifts', crudRouter('shifts',
@@ -89,8 +95,18 @@ app.use('/api/exits', crudRouter('exits',
 // ── Serve React build in production ──────────────────────
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  app.use(express.static(clientDist, {
+    setHeaders: (res, filePath) => {
+      // Never cache index.html so browsers always pick up the newest hashed assets
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    },
+  }));
+  app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
 } else {
   // ── 404 handler (dev only) ───────────────────────────────
   app.use((req, res) => {

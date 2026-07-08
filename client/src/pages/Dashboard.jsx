@@ -212,70 +212,53 @@ function WeeklyPulse({ trend }) {
 
 function PayrollKpiCard({ pp }) {
   const net = pp ? pp.netPayable : 0;
-  const color = '#16A34A';
+  const color = '#0F766E';
   return (
-    <div className="kpi-card" style={{ '--kc-glow': '#16A34A22', '--kc-accent': color }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 9, background: '#DCFCE7', color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <CalendarCheck size={17} strokeWidth={1.8} />
-        </div>
-        {pp && (
-          <span style={{ fontSize: 10, color: '#94A3B8', background: '#F8FAFC', border: '1px solid #E8ECF0', borderRadius: 20, padding: '2px 7px' }}>
-            Till {pp.asOfDate}
-          </span>
-        )}
+    <div className="kc">
+      <div className="kc-top">
+        <span className="kc-label">Net Payable</span>
+        <span className="kc-ic" style={{ background: color + '14', color }}>
+          <CalendarCheck size={15} strokeWidth={2} />
+        </span>
       </div>
-      <div className="kpi-value"><FlipNumber formatted={rupee(net)} color={color} /></div>
-      <div className="kpi-label">Net Payable</div>
-      {pp && (
-        <>
-          <div className="kpi-divider" />
-          <div className="kpi-sub" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-            <span><span style={{ color: '#7C3AED', fontWeight: 600 }}>{rupee(pp.earnedGross)}</span> earned</span>
-            {pp.totalDeductions > 0 && (
-              <span><span style={{ color: '#DC2626', fontWeight: 600 }}>−{rupee(pp.totalDeductions)}</span> deducted</span>
-            )}
-          </div>
-        </>
-      )}
+      <div className="kc-value">{rupee(net)}</div>
+      {pp ? (
+        <div className="kc-sub" style={{ flexWrap: 'wrap', rowGap: 3 }}>
+          <span style={{ color: '#475569' }}><b style={{ color: '#0F172A', fontWeight: 600 }}>{rupee(pp.earnedGross)}</b> earned</span>
+          {pp.totalDeductions > 0 && (
+            <>
+              <span className="kc-sep" />
+              <span style={{ color: '#DC2626', fontWeight: 600 }}>−{rupee(pp.totalDeductions)}</span>
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function KpiCard({ cfg, value, data }) {
-  const { icon: Icon, label, color, iconBg, pulse, sub, subFn, fmt } = cfg;
+  const { icon: Icon, label, color, sub, subFn, fmt } = cfg;
   const numVal = typeof value === 'number' ? value : 0;
   const display = fmt === 'rupee' ? rupee(numVal) : numVal.toLocaleString('en-IN');
   const subText = subFn ? subFn(numVal, data || {}) : sub;
 
   return (
-    <div className={`kpi-card${pulse ? ' kpi-glow' : ''}`}
-      style={{ '--kc-glow': color + '22', '--kc-accent': color }}>
-
-      {/* Icon bubble */}
-      <div style={{
-        width: 36, height: 36, borderRadius: 9,
-        background: iconBg, color,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon size={17} strokeWidth={1.8} />
+    <div className="kc">
+      <div className="kc-top">
+        <span className="kc-label">{label}</span>
+        <span className="kc-ic" style={{ background: color + '14', color }}>
+          <Icon size={15} strokeWidth={2} />
+        </span>
       </div>
 
-      {/* Value — flip counter */}
-      <div className="kpi-value"><FlipNumber formatted={display} color={color} /></div>
+      <div className="kc-value">{display}</div>
 
-      {/* Label */}
-      <div className="kpi-label">{label}</div>
-
-      {/* Divider + contextual sub-text */}
       {subText && (
-        <>
-          <div className="kpi-divider" />
-          <div className="kpi-sub">
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0, opacity: .75 }} />
-            {subText}
-          </div>
-        </>
+        <div className="kc-sub">
+          <span className="kc-dot" style={{ background: color }} />
+          {subText}
+        </div>
       )}
     </div>
   );
@@ -666,51 +649,28 @@ export default function Dashboard() {
   ].filter(Boolean);
 
   return (
-    <div>
+    <div className="dash-v2">
 
-      {/* ── Hero Banner ── */}
-      <div className="dash-hero">
-        <div className="dash-hero-orb dash-hero-orb-1" />
-        <div className="dash-hero-orb dash-hero-orb-2" />
-        <div className="dash-hero-orb dash-hero-orb-3" />
+      {/* ── Header ── */}
+      <div className="dash-header">
+        <div>
+          <div className="dash-eyebrow">Rayudu Gari Military Hotel</div>
+          <h1 className="dash-title">Workforce Overview</h1>
+          <div className="dash-subtitle"><span className="live-dot" />{dateStr}</div>
+        </div>
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.9px', color: 'rgba(255,255,255,.38)', textTransform: 'uppercase', marginBottom: 7 }}>
-              🪖 Rayudu Gari Military Hotel — Staff Command Center
+        <div className="dash-summary">
+          {[
+            { label: 'Attendance', value: attPct + '%', tone: attPct >= 80 ? 'pos' : attPct >= 60 ? 'warn' : 'neg' },
+            { label: 'Present', value: `${data.present}/${data.totalEmployees}` },
+            { label: 'Monthly Payroll', value: rupee(data.salaryExpense) },
+            { label: 'Time', value: `${pad(clock.h)}:${pad(clock.m)}`, mono: true },
+          ].map((s) => (
+            <div key={s.label} className="dash-summary-item">
+              <div className={`dash-summary-val ${s.tone || ''}`}>{s.value}</div>
+              <div className="dash-summary-label">{s.label}</div>
             </div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-.3px', color: '#fff', lineHeight: 1.2 }}>
-              Workforce Overview
-            </h1>
-            <div style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,.45)', display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span className="live-dot" />{dateStr}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
-            {/* Live clock */}
-            <div className="dash-hero-stat" style={{ background: 'rgba(255,255,255,.06)', backdropFilter: 'blur(8px)', minWidth: 90, textAlign: 'center' }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {pad(clock.h)}<span style={{ opacity: clock.s % 2 === 0 ? 1 : .3, transition: 'opacity .2s' }}>:</span>{pad(clock.m)}
-              </div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.38)', marginTop: 4, fontFeatureSettings: "'tnum'", letterSpacing: '.5px' }}>
-                :{pad(clock.s)}
-              </div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,.25)', marginTop: 3, fontWeight: 500, letterSpacing: '.4px', textTransform: 'uppercase' }}>Live Time</div>
-            </div>
-
-            {/* Stats */}
-            {[
-              { label: 'Attendance', value: attPct + '%', color: attPct >= 80 ? '#86efac' : attPct >= 60 ? '#fde68a' : '#fca5a5' },
-              { label: 'Payroll',    value: rupee(data.salaryExpense), color: '#c4b5fd' },
-              { label: 'Total Staff',value: String(data.totalEmployees), color: '#93c5fd' },
-            ].map((s) => (
-              <div key={s.label} className="dash-hero-stat" style={{ background: 'rgba(255,255,255,.06)', backdropFilter: 'blur(8px)' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: s.color, letterSpacing: '-.4px', lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.38)', marginTop: 4, fontWeight: 500 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
 

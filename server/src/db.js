@@ -37,14 +37,16 @@ CREATE TABLE IF NOT EXISTS employees (
   emergency_phone TEXT,
   dob TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','exited')),
-  monthly_allowed_holidays INTEGER DEFAULT 0
+  monthly_allowed_holidays INTEGER DEFAULT 4,
+  branch TEXT DEFAULT 'Main Branch',
+  qr_token TEXT
 );
 
 CREATE TABLE IF NOT EXISTS attendance (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('present','absent','half_day','weekly_off','paid_leave','unpaid_leave')),
+  status TEXT NOT NULL CHECK (status IN ('present','absent','half_day','weekly_off','paid_leave','unpaid_leave','holiday')),
   check_in TEXT,
   is_late INTEGER DEFAULT 0,
   remarks TEXT,
@@ -94,6 +96,9 @@ CREATE TABLE IF NOT EXISTS payroll (
   per_day_salary REAL DEFAULT 0,
   absence_deduction REAL DEFAULT 0,
   half_day_deduction REAL DEFAULT 0,
+  weekly_off_days INTEGER DEFAULT 0,
+  extra_off_days INTEGER DEFAULT 0,
+  extra_day_pay REAL DEFAULT 0,
   overtime REAL DEFAULT 0,
   bonus REAL DEFAULT 0,
   advance_deduction REAL DEFAULT 0,
@@ -106,6 +111,38 @@ CREATE TABLE IF NOT EXISTS payroll (
   approved_by TEXT,
   approved_at TEXT,
   UNIQUE(employee_id, month)
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  overall_rating INTEGER NOT NULL CHECK (overall_rating BETWEEN 1 AND 5),
+  professionalism INTEGER,
+  communication INTEGER,
+  knowledge INTEGER,
+  friendliness INTEGER,
+  response_time INTEGER,
+  overall_experience INTEGER,
+  comment TEXT,
+  recommend INTEGER DEFAULT 1,
+  customer_name TEXT,
+  customer_mobile TEXT,
+  customer_email TEXT,
+  status TEXT NOT NULL DEFAULT 'verified' CHECK (status IN ('verified','flagged','hidden')),
+  admin_response TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS review_notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+  review_id INTEGER REFERENCES reviews(id) ON DELETE CASCADE,
+  title TEXT,
+  message TEXT,
+  severity TEXT DEFAULT 'info',
+  is_read INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS penalties (
@@ -178,10 +215,35 @@ CREATE INDEX IF NOT EXISTS idx_payroll_month_status      ON payroll(month, statu
 CREATE INDEX IF NOT EXISTS idx_advances_employee         ON advances(employee_id);
 CREATE INDEX IF NOT EXISTS idx_penalties_employee_date   ON penalties(employee_id, date);
 CREATE INDEX IF NOT EXISTS idx_employees_status          ON employees(status);
+CREATE INDEX IF NOT EXISTS idx_reviews_employee           ON reviews(employee_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_created            ON reviews(created_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_status             ON reviews(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_qr_token  ON employees(qr_token) WHERE qr_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_review_notif_read          ON review_notifications(is_read, created_at);
 `;
+
+// Idempotent column additions for tables that predate a feature.
+// SQLite lacks "ADD COLUMN IF NOT EXISTS", so we check table_info first.
+function addColumnIfMissing(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+function runMigrations() {
+  // Unused weekly-offs paid as extra worked days.
+  addColumnIfMissing('payroll', 'weekly_off_days', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('payroll', 'extra_off_days', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('payroll', 'extra_day_pay', 'REAL DEFAULT 0');
+  // Employee Review & Customer Feedback module.
+  addColumnIfMissing('employees', 'branch', "TEXT DEFAULT 'Main Branch'");
+  addColumnIfMissing('employees', 'qr_token', 'TEXT');
+}
 
 export function initSchema() {
   db.exec(SCHEMA);
+  runMigrations(); // add new columns before indexes that may reference them
   db.exec(INDEXES);
 }
 

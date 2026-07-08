@@ -81,15 +81,17 @@ export function SlipView({ slip }) {
         <div className="item"><div className="v" style={{ color: '#c0392b' }}>{att?.absent || 0}</div><div className="l">Absent</div></div>
         <div className="item"><div className="v" style={{ color: '#c8860d' }}>{att?.half_day || 0}</div><div className="l">Half Day</div></div>
         <div className="item"><div className="v" style={{ color: '#2c6e9b' }}>{att?.weekly_off || 0}</div><div className="l">Weekly Off</div></div>
+        <div className="item"><div className="v" style={{ color: '#0f766e' }}>{att?.holiday || 0}</div><div className="l">Holiday</div></div>
         <div className="item"><div className="v" style={{ color: '#2c6e9b' }}>{att?.paid_leave || 0}</div><div className="l">Paid Leave</div></div>
         <div className="item"><div className="v" style={{ color: '#c8860d' }}>{att?.late || 0}</div><div className="l">Late</div></div>
       </div>
 
       <div style={{ padding: '8px 28px', background: '#f5f7f5', borderBottom: '1px solid var(--line)', fontSize: 12.5, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
         <span>Total Days in Month: <b>{totalDays}</b></span>
-        <span>Allowed Holidays: <b>{allowedHolidays}</b></span>
         <span>Per Day Salary: <b>{rupee(perDay)}</b></span>
-        <span style={{ color: '#c0392b' }}>Extra Absent Days: <b>{p.extra_absent_days || 0}</b></span>
+        <span>Week-Offs Taken: <b>{p.weekly_off_days ?? (att?.weekly_off || 0)}</b> / {allowedHolidays}</span>
+        <span style={{ color: '#2e7d32' }}>Unused Week-Offs (Extra Paid): <b>{p.extra_off_days || 0}</b></span>
+        <span style={{ color: '#c0392b' }}>Absent Days: <b>{p.absent_days || 0}</b></span>
       </div>
 
       <table className="slip-table">
@@ -100,7 +102,7 @@ export function SlipView({ slip }) {
           <tr>
             <td>Basic Salary</td>
             <td className="earning">{rupee(p.base_salary)}</td>
-            <td>Absence Deduction ({p.extra_absent_days || 0} days × {rupee(perDay)})</td>
+            <td>Absence Deduction ({p.absent_days || 0} days × {rupee(perDay)})</td>
             <td className="deduction">{absenceDed > 0 ? `− ${rupee(absenceDed)}` : '—'}</td>
           </tr>
           <tr>
@@ -122,7 +124,8 @@ export function SlipView({ slip }) {
             <td className="deduction">{(p.penalty_deduction || 0) > 0 ? `− ${rupee(p.penalty_deduction)}` : '—'}</td>
           </tr>
           <tr>
-            <td></td><td></td>
+            <td>Extra Week-Off Pay ({p.extra_off_days || 0} days × {rupee(perDay)})</td>
+            <td className="earning">{(p.extra_day_pay || 0) > 0 ? rupee(p.extra_day_pay) : '—'}</td>
             <td>Food Deduction</td>
             <td className="deduction">{(p.food_deduction || 0) > 0 ? `− ${rupee(p.food_deduction)}` : '—'}</td>
           </tr>
@@ -138,7 +141,7 @@ export function SlipView({ slip }) {
           </tr>
           <tr style={{ background: '#f9fbf9' }}>
             <td><b>Gross Earnings</b></td>
-            <td><b>{rupee((p.base_salary || 0) + (p.overtime || 0) + (p.bonus || 0) + Math.max(0, p.manual_correction || 0))}</b></td>
+            <td><b>{rupee((p.base_salary || 0) + (p.extra_day_pay || 0) + (p.overtime || 0) + (p.bonus || 0) + Math.max(0, p.manual_correction || 0))}</b></td>
             <td><b>Total Deductions</b></td>
             <td><b style={{ color: '#c0392b' }}>− {rupee(totalDed + Math.max(0, -(p.manual_correction || 0)))}</b></td>
           </tr>
@@ -160,7 +163,7 @@ export function SlipView({ slip }) {
         <div>
           <div className="label">Net Salary Payable</div>
           <div style={{ fontSize: 12, color: '#6b7a72', marginTop: 2 }}>
-            Base {rupee(p.base_salary)} + Earnings {rupee((p.overtime || 0) + (p.bonus || 0) + Math.max(0, p.manual_correction || 0))} − Deductions {rupee(totalDed + Math.max(0, -(p.manual_correction || 0)))}
+            Base {rupee(p.base_salary)} + Earnings {rupee((p.extra_day_pay || 0) + (p.overtime || 0) + (p.bonus || 0) + Math.max(0, p.manual_correction || 0))} − Deductions {rupee(totalDed + Math.max(0, -(p.manual_correction || 0)))}
           </div>
         </div>
         <div className="amount">{rupee(p.net_salary)}</div>

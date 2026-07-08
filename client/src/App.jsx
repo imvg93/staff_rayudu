@@ -15,6 +15,10 @@ const Payroll      = lazy(() => import('./pages/Payroll.jsx'));
 const Timeline     = lazy(() => import('./pages/Timeline.jsx'));
 const SalarySlip   = lazy(() => import('./pages/SalarySlip.jsx'));
 const SalaryReport = lazy(() => import('./pages/SalaryReport.jsx'));
+const Reviews        = lazy(() => import('./pages/Reviews.jsx'));
+const Leaderboard    = lazy(() => import('./pages/Leaderboard.jsx'));
+const ReviewAnalytics = lazy(() => import('./pages/ReviewAnalytics.jsx'));
+const PublicReview   = lazy(() => import('./pages/PublicReview.jsx'));
 const Shifts       = lazy(() => import('./pages/SimplePages.jsx').then(m => ({ default: m.Shifts })));
 const Advances     = lazy(() => import('./pages/SimplePages.jsx').then(m => ({ default: m.Advances })));
 const Penalties    = lazy(() => import('./pages/SimplePages.jsx').then(m => ({ default: m.Penalties })));
@@ -30,6 +34,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Public customer review form — reached by scanning an employee QR code (no auth) */}
+      <Route path="/r/:token" element={<Suspense fallback={fallback}><PublicReview /></Suspense>} />
       <Route element={<Layout />}>
         <Route path="/" element={<Suspense fallback={fallback}><Dashboard /></Suspense>} />
         <Route path="/supervisor" element={<Suspense fallback={fallback}><Supervisor /></Suspense>} />
@@ -51,6 +57,9 @@ export default function App() {
         <Route path="/exits" element={<Suspense fallback={fallback}><Exits /></Suspense>} />
         <Route path="/salary-slip" element={<Suspense fallback={fallback}><SalarySlip /></Suspense>} />
         <Route path="/salary-report" element={<Suspense fallback={fallback}><SalaryReport /></Suspense>} />
+        <Route path="/reviews" element={<Suspense fallback={fallback}><Reviews /></Suspense>} />
+        <Route path="/leaderboard" element={<Suspense fallback={fallback}><Leaderboard /></Suspense>} />
+        <Route path="/review-analytics" element={<Suspense fallback={fallback}><ReviewAnalytics /></Suspense>} />
       </Route>
     </Routes>
   );

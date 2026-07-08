@@ -352,6 +352,7 @@ export default function Timeline() {
                   { label: 'Half-day',     value: data.attendanceSummary.half_day, color: '#D97706', bg: '#FFFBEB' },
                   { label: 'On Leave',     value: data.attendanceSummary.leave,    color: '#2563EB', bg: '#EFF6FF' },
                   { label: 'Weekly Off',    value: data.attendanceSummary.weekly_off, color: '#0F766E', bg: '#ECFDF5' },
+                  { label: 'Holiday',       value: data.attendanceSummary.holiday,  color: '#0F766E', bg: '#ECFDF5' },
                   { label: 'Late Entries', value: data.attendanceSummary.late,     color: '#7C3AED', bg: '#F5F3FF' },
                 ].map((r) => (
                   <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

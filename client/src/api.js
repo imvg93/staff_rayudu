@@ -28,5 +28,6 @@ export default api;
 export const rupee = (n) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 export const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+export const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 export const today = () => new Date().toISOString().slice(0, 10);
 export const thisMonth = () => new Date().toISOString().slice(0, 7);

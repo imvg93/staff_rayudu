@@ -78,6 +78,7 @@ router.get('/report/:month', (req, res) => {
       SUM(CASE WHEN a.status='absent' THEN 1 ELSE 0 END) AS absent,
       SUM(CASE WHEN a.status='half_day' THEN 1 ELSE 0 END) AS half_day,
       SUM(CASE WHEN a.status='weekly_off' THEN 1 ELSE 0 END) AS weekly_off,
+      SUM(CASE WHEN a.status='holiday' THEN 1 ELSE 0 END) AS holiday,
       SUM(CASE WHEN a.status='paid_leave' THEN 1 ELSE 0 END) AS paid_leave,
       SUM(CASE WHEN a.status='unpaid_leave' THEN 1 ELSE 0 END) AS unpaid_leave,
       SUM(CASE WHEN a.status='absent' OR a.status='unpaid_leave' THEN 1 ELSE 0 END) AS total_absent,

@@ -26,7 +26,7 @@ const upload = multer({
 });
 
 const FIELDS = ['name','department','designation','joining_date','salary','shift',
-  'phone','emergency_name','emergency_phone','dob','status','photo_url'];
+  'phone','emergency_name','emergency_phone','dob','status','photo_url','monthly_allowed_holidays'];
 
 function nextEmpCode() {
   const row = db.prepare("SELECT emp_code FROM employees WHERE emp_code LIKE 'RGM%' ORDER BY id DESC").all();
@@ -59,10 +59,11 @@ router.post('/', (req, res) => {
   const b = req.body;
   const photo = b.photo_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.name || code)}`;
   const info = db.prepare(`INSERT INTO employees
-    (emp_code,name,photo_url,department,designation,joining_date,salary,shift,phone,emergency_name,emergency_phone,dob,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    (emp_code,name,photo_url,department,designation,joining_date,salary,shift,phone,emergency_name,emergency_phone,dob,status,monthly_allowed_holidays)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       code, b.name, photo, b.department, b.designation, b.joining_date,
-      b.salary || 0, b.shift, b.phone, b.emergency_name, b.emergency_phone, b.dob, b.status || 'active');
+      b.salary || 0, b.shift, b.phone, b.emergency_name, b.emergency_phone, b.dob, b.status || 'active',
+      b.monthly_allowed_holidays ?? 4);
   res.status(201).json(db.prepare('SELECT * FROM employees WHERE id = ?').get(info.lastInsertRowid));
 });
 
