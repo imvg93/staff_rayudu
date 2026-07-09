@@ -8,6 +8,35 @@ const localDate = (d = new Date()) =>
 const todayStr = () => localDate();
 const monthStr = () => localDate().slice(0, 7);
 
+// Resolve the pay window for prorated payroll.
+// asOf (YYYY-MM-DD) = pay salary up to and including this date (half-month / any date).
+// When omitted, defaults to "yesterday" of the current month (live dashboard behaviour).
+function resolvePayWindow(asOf) {
+  let cutoff, month, monthNum, year;
+  if (asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+    cutoff = asOf;
+    year = Number(asOf.slice(0, 4));
+    monthNum = Number(asOf.slice(5, 7));
+    month = asOf.slice(0, 7);
+  } else {
+    const now = new Date();
+    year = now.getFullYear();
+    monthNum = now.getMonth() + 1;
+    month = `${year}-${String(monthNum).padStart(2, '0')}`;
+    // Yesterday, using local date parts to avoid UTC drift
+    const yday = new Date(year, now.getMonth(), now.getDate() - 1);
+    cutoff = localDate(yday);
+  }
+  const firstOfMonth = `${month}-01`;
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  // Day-of-month of the cutoff, clamped to this month's range
+  const cutoffDay = Number(cutoff.slice(8, 10));
+  const daysElapsed = cutoff >= firstOfMonth
+    ? Math.min(cutoffDay, daysInMonth)
+    : 0;
+  return { monthStr: month, firstOfMonth, cutoff, daysElapsed, daysInMonth };
+}
+
 // Workforce analytics dashboard metrics
 router.get('/dashboard', (req, res) => {
   const date = req.query.date || todayStr();
@@ -109,19 +138,8 @@ router.get('/dept-attendance', (req, res) => {
 
 // Dynamic payroll progress — prorated earnings based on attendance up to yesterday
 router.get('/payroll-progress', (req, res) => {
-  const now = new Date();
-  const yr = now.getFullYear();
-  const mo = now.getMonth(); // 0-indexed
-  const moNum = mo + 1;
-  const monthStr = `${yr}-${String(moNum).padStart(2, '0')}`;
-  const firstOfMonth = `${monthStr}-01`;
-  const daysInMonth = new Date(yr, moNum, 0).getDate();
-
-  // Yesterday — use local date parts to avoid UTC offset shifting the day
-  const yday = new Date(yr, mo, now.getDate() - 1);
-  const ydayStr = `${yday.getFullYear()}-${String(yday.getMonth() + 1).padStart(2, '0')}-${String(yday.getDate()).padStart(2, '0')}`;
-  // Only count days that fall within the current month
-  const daysElapsed = ydayStr >= firstOfMonth ? yday.getDate() : 0;
+  const { monthStr, firstOfMonth, cutoff: ydayStr, daysElapsed, daysInMonth } =
+    resolvePayWindow(req.query.asOf);
 
   const employees = db.prepare(
     "SELECT id, salary, monthly_allowed_holidays FROM employees WHERE status = 'active'"
@@ -210,17 +228,8 @@ router.get('/payroll-progress', (req, res) => {
 
 // Per-employee payroll deduction details for current month (up to yesterday)
 router.get('/payroll-deductions', (req, res) => {
-  const now = new Date();
-  const yr = now.getFullYear();
-  const mo = now.getMonth();
-  const moNum = mo + 1;
-  const monthStr = `${yr}-${String(moNum).padStart(2, '0')}`;
-  const firstOfMonth = `${monthStr}-01`;
-  const daysInMonth = new Date(yr, moNum, 0).getDate();
-
-  const yday = new Date(yr, mo, now.getDate() - 1);
-  const ydayStr = `${yday.getFullYear()}-${String(yday.getMonth() + 1).padStart(2, '0')}-${String(yday.getDate()).padStart(2, '0')}`;
-  const daysElapsed = ydayStr >= firstOfMonth ? yday.getDate() : 0;
+  const { firstOfMonth, cutoff: ydayStr, daysElapsed, daysInMonth } =
+    resolvePayWindow(req.query.asOf);
 
   const employees = db.prepare(
     "SELECT id, name, emp_code, department, salary, monthly_allowed_holidays FROM employees WHERE status = 'active' ORDER BY name"
@@ -300,6 +309,81 @@ router.get('/payroll-deductions', (req, res) => {
   }
 
   res.json(result);
+});
+
+// Final settlement for a single leaving employee up to their last working day.
+// "If someone leaves mid-month, how much do I actually hand them?"
+//   Earned pay (present + weekly-off + paid-leave in full, half-days at ½) up to
+//   the last working day, minus this month's penalties, minus the FULL outstanding
+//   advance balance (recovered in one go because the employee is leaving).
+router.get('/settlement', (req, res) => {
+  const employee_id = Number(req.query.employee_id);
+  if (!employee_id) return res.status(400).json({ error: 'employee_id is required' });
+
+  const emp = db.prepare(
+    'SELECT id, emp_code, name, department, designation, salary, monthly_allowed_holidays, joining_date FROM employees WHERE id = ?'
+  ).get(employee_id);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  // Last working day — defaults to today when not supplied
+  const { monthStr, firstOfMonth, cutoff, daysElapsed, daysInMonth } =
+    resolvePayWindow(req.query.asOf || todayStr());
+
+  const perDay = (emp.salary || 0) / daysInMonth;
+
+  const a = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status='present'      THEN 1 ELSE 0 END) AS present,
+      SUM(CASE WHEN status='half_day'     THEN 1 ELSE 0 END) AS half_day,
+      SUM(CASE WHEN status='absent'       THEN 1 ELSE 0 END) AS absent,
+      SUM(CASE WHEN status='weekly_off'   THEN 1 ELSE 0 END) AS weekly_off,
+      SUM(CASE WHEN status='paid_leave'   THEN 1 ELSE 0 END) AS paid_leave,
+      SUM(CASE WHEN status='unpaid_leave' THEN 1 ELSE 0 END) AS unpaid_leave,
+      COUNT(*) AS marked
+    FROM attendance
+    WHERE employee_id = ? AND date >= ? AND date <= ?
+  `).get(employee_id, firstOfMonth, cutoff);
+
+  const counts = {
+    present: a.present || 0, half_day: a.half_day || 0, absent: a.absent || 0,
+    weekly_off: a.weekly_off || 0, paid_leave: a.paid_leave || 0,
+    unpaid_leave: a.unpaid_leave || 0, marked: a.marked || 0,
+  };
+
+  // Paid days = worked + rest days that still count as paid; half-days at ½
+  const fullPaidDays = counts.present + counts.weekly_off + counts.paid_leave;
+  const paidDayEquivalent = fullPaidDays + 0.5 * counts.half_day;
+  const earnedSalary = Math.round(perDay * paidDayEquivalent);
+  // Days with no attendance marked yet in the window (info only — not paid)
+  const unmarkedDays = Math.max(0, daysElapsed - counts.marked);
+
+  const penalties = db.prepare(
+    "SELECT COALESCE(SUM(amount),0) d FROM penalties WHERE employee_id = ? AND substr(date,1,7) = ?"
+  ).get(employee_id, monthStr).d;
+
+  const advanceRows = db.prepare(
+    'SELECT id, amount, date, balance, reason FROM advances WHERE employee_id = ? AND balance > 0 ORDER BY date'
+  ).all(employee_id);
+  const advanceOutstanding = advanceRows.reduce((s, r) => s + (r.balance || 0), 0);
+
+  const netSettlement = Math.round(earnedSalary - penalties - advanceOutstanding);
+
+  res.json({
+    employee: emp,
+    month: monthStr,
+    asOf: cutoff,
+    daysInMonth,
+    daysElapsed,
+    perDay: Math.round(perDay),
+    counts,
+    unmarkedDays,
+    paidDayEquivalent,
+    earnedSalary,
+    penalties: Math.round(penalties),
+    advanceOutstanding: Math.round(advanceOutstanding),
+    advanceRows,
+    netSettlement,
+  });
 });
 
 // Hidden salary leakage — quantifiable money at risk or silently overpaid.

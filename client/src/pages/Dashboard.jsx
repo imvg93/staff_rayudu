@@ -45,7 +45,7 @@ function useClock() {
   return time;
 }
 
-function useDashData() {
+function useDashData(asOf) {
   const [data, setData] = useState(null);
   const [trend, setTrend] = useState([]);
   const [deptAtt, setDeptAtt] = useState([]);
@@ -55,14 +55,19 @@ function useDashData() {
       api.get('/analytics/dashboard'),
       api.get('/analytics/attendance-trend?days=30'),
       api.get('/analytics/dept-attendance'),
-      api.get('/analytics/payroll-progress'),
-    ]).then(([d, t, da, pp]) => {
+    ]).then(([d, t, da]) => {
       setData(d.data);
       setTrend(t.data || []);
       setDeptAtt(da.data || []);
-      setPayrollProgress(pp.data);
     }).catch(() => {});
   }, []);
+  // Payroll progress refetches whenever the pay-up-to date changes
+  useEffect(() => {
+    setPayrollProgress(null);
+    api.get('/analytics/payroll-progress', { params: asOf ? { asOf } : {} })
+      .then((pp) => setPayrollProgress(pp.data))
+      .catch(() => {});
+  }, [asOf]);
   return { data, trend, deptAtt, payrollProgress };
 }
 
@@ -440,16 +445,18 @@ function fmtDate(d) {
   return `${day} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1]}`;
 }
 
-function PayrollDeductionsModal({ asOfDate, onClose }) {
+function PayrollDeductionsModal({ asOfDate, asOf, onClose }) {
   const [rows, setRows] = useState(null);
   const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
-    api.get('/analytics/payroll-deductions').then((r) => setRows(r.data));
-  }, []);
+    api.get('/analytics/payroll-deductions', { params: asOf ? { asOf } : {} })
+      .then((r) => setRows(r.data));
+  }, [asOf]);
 
   const deducted = (rows || []).filter((e) => e.totalDeduction > 0);
   const noDeduction = (rows || []).filter((e) => e.totalDeduction === 0);
+  const totalNet = (rows || []).reduce((s, e) => s + (e.netPayable || 0), 0);
 
   const toggle = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -597,6 +604,14 @@ function PayrollDeductionsModal({ asOfDate, onClose }) {
             </>
           )}
         </div>
+
+        {/* Total net payable footer — the actual payout for this date */}
+        {rows && rows.length > 0 && (
+          <div style={{ padding: '13px 22px', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, background: '#FAFAFA' }}>
+            <span style={{ fontSize: 12, color: '#64748B' }}>Total net payable · {rows.length} employee{rows.length !== 1 ? 's' : ''} till {asOfDate}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#16A34A', fontFeatureSettings: "'tnum'" }}>{rupee(totalNet)}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -605,7 +620,8 @@ function PayrollDeductionsModal({ asOfDate, onClose }) {
 /* ── Main Dashboard ─────────────────────────────────────── */
 
 export default function Dashboard() {
-  const { data, trend, deptAtt, payrollProgress } = useDashData();
+  const [asOf, setAsOf] = useState('');
+  const { data, trend, deptAtt, payrollProgress } = useDashData(asOf);
   const [showDeductions, setShowDeductions] = useState(false);
   const clock = useClock();
   const pad = (n) => String(n).padStart(2, '0');
@@ -868,9 +884,34 @@ export default function Dashboard() {
               </div>
               <h3 style={{ margin: 0 }}>Payroll</h3>
             </div>
-            {payrollProgress && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10.5, color: 'var(--subtle)' }}>Till {payrollProgress.asOfDate}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: 'var(--subtle)' }}>
+                Pay up to
+                <input
+                  type="date"
+                  value={asOf || (payrollProgress?.asOfDate ?? '')}
+                  max={todayStr()}
+                  onChange={(e) => setAsOf(e.target.value)}
+                  style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6,
+                    border: '1px solid var(--line)', background: '#fff', color: '#0F172A',
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                />
+              </label>
+              {asOf && (
+                <button
+                  onClick={() => setAsOf('')}
+                  title="Reset to yesterday"
+                  style={{
+                    fontSize: 10.5, fontWeight: 600, padding: '4px 8px', borderRadius: 6,
+                    border: '1px solid var(--line)', background: '#F8FAFC', color: '#64748B', cursor: 'pointer',
+                  }}
+                >
+                  Today
+                </button>
+              )}
+              {payrollProgress && (
                 <button
                   onClick={() => setShowDeductions(true)}
                   style={{
@@ -885,8 +926,8 @@ export default function Dashboard() {
                   <AlertTriangle size={11} strokeWidth={2.2} />
                   Why deducted?
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           <div className="panel-pad" style={{ paddingTop: 4 }}>
             {payrollProgress ? (
@@ -1081,6 +1122,7 @@ export default function Dashboard() {
       {showDeductions && payrollProgress && (
         <PayrollDeductionsModal
           asOfDate={payrollProgress.asOfDate}
+          asOf={asOf}
           onClose={() => setShowDeductions(false)}
         />
       )}

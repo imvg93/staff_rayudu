@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import ResourcePage from '../components/ResourcePage.jsx';
-import { Badge } from '../components/ui.jsx';
-import { rupee, fmtDate, today } from '../api.js';
+import { Badge, EmployeeSelect, Spinner } from '../components/ui.jsx';
+import api, { rupee, fmtDate, today } from '../api.js';
 
 const DEPTS = ['Kitchen', 'Dining Service', 'Counter', 'Parcel', 'Cleaning'];
 
@@ -161,8 +162,118 @@ export function Promotions() {
   );
 }
 
+function SettlementCalculator() {
+  const [empId, setEmpId] = useState('');
+  const [lastDay, setLastDay] = useState(today());
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const calculate = async () => {
+    if (!empId) { setErr('Select the leaving employee first.'); return; }
+    setLoading(true); setErr(null); setResult(null);
+    try {
+      const { data } = await api.get('/analytics/settlement', {
+        params: { employee_id: empId, asOf: lastDay },
+      });
+      setResult(data);
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message);
+    } finally { setLoading(false); }
+  };
+
+  const line = (label, value, tone) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', fontSize: 13 }}>
+      <span style={{ color: '#64748B' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: tone || '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="panel" style={{ padding: 18, marginBottom: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 3 }}>Final Settlement Calculator</div>
+      <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
+        Employee leaving mid-month? Pick their last working day to see exactly how much to pay.
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4, fontWeight: 600 }}>Leaving Employee</div>
+          <EmployeeSelect value={empId} onChange={setEmpId} />
+        </div>
+        <div style={{ flex: '0 0 160px' }}>
+          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4, fontWeight: 600 }}>Last Working Day</div>
+          <input type="date" value={lastDay} max={today()} onChange={(e) => setLastDay(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', fontFamily: 'inherit', fontSize: 13 }} />
+        </div>
+        <button className="btn" onClick={calculate} disabled={loading} style={{ flex: '0 0 auto' }}>
+          {loading ? 'Calculating…' : 'Calculate'}
+        </button>
+      </div>
+
+      {err && <div className="error-msg" style={{ marginTop: 12 }}>{err}</div>}
+
+      {loading && <div style={{ marginTop: 16 }}><Spinner /></div>}
+
+      {result && !loading && (
+        <div style={{ marginTop: 16, borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>
+            {result.employee.name} · {result.employee.emp_code}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+            {result.employee.department} · Monthly {rupee(result.employee.salary)} · Per-day {rupee(result.perDay)}
+            {' '}· Paid for {result.paidDayEquivalent} of {result.daysElapsed} days worked till {fmtDate(result.asOf)}
+          </div>
+
+          {/* Attendance summary chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {[
+              ['Present', result.counts.present, '#16A34A', '#F0FDF4'],
+              ['Half-day', result.counts.half_day, '#D97706', '#FFFBEB'],
+              ['Week-off', result.counts.weekly_off, '#2563EB', '#EFF6FF'],
+              ['Paid leave', result.counts.paid_leave, '#0891B2', '#ECFEFF'],
+              ['Absent', result.counts.absent, '#DC2626', '#FEF2F2'],
+              ['Unpaid leave', result.counts.unpaid_leave, '#DC2626', '#FEF2F2'],
+            ].filter(([, v]) => v > 0).map(([label, v, c, bg]) => (
+              <span key={label} style={{ fontSize: 11, fontWeight: 600, color: c, background: bg, padding: '3px 9px', borderRadius: 20 }}>
+                {v} {label}
+              </span>
+            ))}
+          </div>
+
+          {line('Earned salary (paid days × per-day)', rupee(result.earnedSalary), '#16A34A')}
+          {result.penalties > 0 && line('Penalties this month', '− ' + rupee(result.penalties), '#DC2626')}
+          {result.advanceOutstanding > 0 && line('Outstanding advance (full recovery)', '− ' + rupee(result.advanceOutstanding), '#DC2626')}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 12, borderTop: '2px solid #0F172A' }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Amount to pay</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: result.netSettlement >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+              {rupee(result.netSettlement)}
+            </span>
+          </div>
+          {result.netSettlement < 0 && (
+            <div style={{ fontSize: 11.5, color: '#DC2626', marginTop: 6 }}>
+              Negative — the employee still owes {rupee(Math.abs(result.netSettlement))} in advances after their earned pay.
+            </div>
+          )}
+          {result.unmarkedDays > 0 && (
+            <div style={{ fontSize: 11.5, color: '#D97706', marginTop: 6 }}>
+              Note: {result.unmarkedDays} day(s) in this period have no attendance marked — they are not counted as paid. Mark them if the employee worked.
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8 }}>
+            Copy this amount into the “Settlement Amount” field when you add the exit record below.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Exits() {
   return (
+    <>
+    <SettlementCalculator />
     <ResourcePage
       title="Exit & Settlement Management" subtitle="Resignations, notice period & final settlement"
       endpoint="/exits"
@@ -184,5 +295,6 @@ export function Exits() {
         { name: 'reason', label: 'Exit Reason', type: 'textarea', full: true },
       ]}
     />
+    </>
   );
 }
