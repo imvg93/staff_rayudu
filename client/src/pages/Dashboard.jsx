@@ -890,7 +890,7 @@ export default function Dashboard() {
                 <input
                   type="date"
                   value={asOf || (payrollProgress?.asOfDate ?? '')}
-                  max={todayStr()}
+                  max={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
                   onChange={(e) => setAsOf(e.target.value)}
                   style={{
                     fontSize: 11, fontWeight: 600, padding: '3px 6px', borderRadius: 6,

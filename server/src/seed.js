@@ -428,8 +428,104 @@ if (topEmp) {
     'success', 0, reviewDateTime(1));
 }
 
+// ===========================================================================
+// DEMO — Insights page signals (current month) for the client walkthrough.
+// Deliberately seeds every Salary-Leakage bucket and a Shift-Overload case so
+// the Insights screen tells a complete story out of the box. All values are
+// crafted (not run-date sensitive) to keep each bucket crisp and intentional.
+// ===========================================================================
+const curTotalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+const elapsedDays = Math.min(today.getDate(), curTotalDays);
+const pad2 = (d) => String(d).padStart(2, '0');
+
+// --- Salary Leakage: advances ----------------------------------------------
+// 1. Unrecovered advances — owed, but monthly_deduction = 0 (never clawed back)
+insAdv.run(empIds[6], 8000, daysAgo(20), 0, 8000, 'Emergency medical — recovery not set');
+insAdv.run(empIds[12], 5000, daysAgo(10), 0, 5000, 'Personal — recovery not set');
+// 2. Advance still owed by an employee who has already exited
+insAdv.run(exitedId, 6000, daysAgo(70), 0, 4000, 'Advance taken before exit');
+// 3. Data error — outstanding balance larger than the amount ever issued
+insAdv.run(empIds[9], 3000, daysAgo(30), 500, 4500, 'Tracking error — balance exceeds amount');
+
+// --- Salary Leakage: payroll-driven buckets (current month) ----------------
+// a) Overpayment — Anjaneyulu stored at FULL pay despite 7 absences this month,
+//    so a fresh recompute is far lower → 'Payroll higher than recompute'.
+insPay.run({
+  employee_id: empIds[1], month: curMonth, base_salary: employees[1][3],
+  total_days_in_month: curTotalDays, allowed_holidays: ALLOWED_OFFS,
+  present_days: 10, absent_days: 7, extra_absent_days: 7, half_days: 0,
+  weekly_off_days: 4, extra_off_days: 0, extra_day_pay: 0,
+  per_day_salary: Math.round((employees[1][3] / curTotalDays) * 100) / 100,
+  absence_deduction: 0, half_day_deduction: 0,
+  overtime: 0, bonus: 0, advance_deduction: 0, penalty_deduction: 0,
+  food_deduction: 0, other_deductions: 0, manual_correction: 0,
+  net_salary: employees[1][3], status: 'approved',
+});
+// b) Rest-day overtime — Kiran worked all 4 weekly-offs → 4 extra days paid.
+{
+  const base = employees[8][3];
+  const perDay = Math.round((base / curTotalDays) * 100) / 100;
+  const extraPay = Math.round(perDay * 4);
+  insPay.run({
+    employee_id: empIds[8], month: curMonth, base_salary: base,
+    total_days_in_month: curTotalDays, allowed_holidays: ALLOWED_OFFS,
+    present_days: Math.max(12, elapsedDays), absent_days: 0, extra_absent_days: 0, half_days: 0,
+    weekly_off_days: 0, extra_off_days: 4, extra_day_pay: extraPay,
+    per_day_salary: perDay, absence_deduction: 0, half_day_deduction: 0,
+    overtime: 0, bonus: 0, advance_deduction: 0, penalty_deduction: 0,
+    food_deduction: 0, other_deductions: 0, manual_correction: 0,
+    net_salary: base + extraPay, status: 'processed',
+  });
+}
+// c) Paid despite low attendance — Pochamma only 3 present days but net > 0.
+{
+  const base = employees[14][3];
+  const perDay = Math.round((base / curTotalDays) * 100) / 100;
+  insPay.run({
+    employee_id: empIds[14], month: curMonth, base_salary: base,
+    total_days_in_month: curTotalDays, allowed_holidays: ALLOWED_OFFS,
+    present_days: 3, absent_days: 0, extra_absent_days: 0, half_days: 0,
+    weekly_off_days: 0, extra_off_days: 0, extra_day_pay: 0,
+    per_day_salary: perDay, absence_deduction: 0, half_day_deduction: 0,
+    overtime: 0, bonus: 0, advance_deduction: 0, penalty_deduction: 0,
+    food_deduction: 0, other_deductions: 0, manual_correction: 0,
+    net_salary: Math.round(perDay * 3), status: 'processed',
+  });
+}
+
+// --- Salary Leakage: ghost staff (active, salaried, zero attendance) --------
+insEmp.run({
+  emp_code: 'RGM020', name: 'Deepak (New Joiner)',
+  photo_url: 'https://api.dicebear.com/7.x/initials/svg?seed=Deepak',
+  department: 'Kitchen', designation: 'Helper', joining_date: daysAgo(3),
+  salary: 13000, shift: 'morning', phone: '9876500020',
+  emergency_name: 'Family Contact', emergency_phone: '9012300020',
+  dob: '2001-04-12', status: 'active', monthly_allowed_holidays: 4,
+  branch: BRANCHES[0], qr_token: makeToken(),
+});
+
+// --- Shift Overload: make one employee clearly overloaded this month --------
+// Kiran present every elapsed day with no weekly-off + a few late marks
+// → high rest-skipped, long streak and lateness = a 'high' overload score.
+const overloadAtt = db.prepare(`
+  INSERT INTO attendance (employee_id,date,status,check_in,is_late,remarks)
+  VALUES (?,?,?,?,?,?)
+  ON CONFLICT(employee_id,date) DO UPDATE SET
+    status=excluded.status, check_in=excluded.check_in,
+    is_late=excluded.is_late, remarks=excluded.remarks
+`);
+for (let d = 1; d <= elapsedDays; d++) {
+  const late = d % 5 === 0 ? 1 : 0;
+  overloadAtt.run(empIds[8], `${curMonth}-${pad2(d)}`, 'present',
+    late ? '09:55' : '09:05', late, late ? 'Late arrival' : 'Worked — no weekly-off taken');
+}
+
+// --- Shift Overload: create a 'thin shift' department -----------------------
+// Move Sai Teja to morning so Counter has nobody on the evening shift.
+db.prepare("UPDATE employees SET shift='morning' WHERE id=?").run(empIds[9]);
+
 console.log('Seed complete.');
-console.log('  Employees:', empIds.length + 1, '(1 exited)');
+console.log('  Employees:', empIds.length + 2, '(1 exited, 1 new joiner)');
 console.log('  Reviews:', reviewCount);
 console.log('  Login accounts:');
 console.log('    Owner      -> owner@rayudu.com / owner123');
