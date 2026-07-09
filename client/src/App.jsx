@@ -10,6 +10,7 @@ const Celebrations = lazy(() => import('./pages/Celebrations.jsx'));
 const Staff        = lazy(() => import('./pages/Staff.jsx'));
 const StaffDetail  = lazy(() => import('./pages/StaffDetail.jsx'));
 const Attendance   = lazy(() => import('./pages/Attendance.jsx'));
+const Insights     = lazy(() => import('./pages/Insights.jsx'));
 const Leaves       = lazy(() => import('./pages/Leaves.jsx'));
 const Payroll      = lazy(() => import('./pages/Payroll.jsx'));
 const Timeline     = lazy(() => import('./pages/Timeline.jsx'));
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/exits" element={<Suspense fallback={fallback}><Exits /></Suspense>} />
         <Route path="/salary-slip" element={<Suspense fallback={fallback}><SalarySlip /></Suspense>} />
         <Route path="/salary-report" element={<Suspense fallback={fallback}><SalaryReport /></Suspense>} />
+        <Route path="/insights" element={<Suspense fallback={fallback}><Insights /></Suspense>} />
         <Route path="/reviews" element={<Suspense fallback={fallback}><Reviews /></Suspense>} />
         <Route path="/leaderboard" element={<Suspense fallback={fallback}><Leaderboard /></Suspense>} />
         <Route path="/review-analytics" element={<Suspense fallback={fallback}><ReviewAnalytics /></Suspense>} />

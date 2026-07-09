@@ -39,6 +39,7 @@ function DailyGrid() {
   const [marks, setMarks] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showList, setShowList] = useState(null); // 'present' | 'absent' | null
 
   const load = () => {
     api.get(`/attendance?date=${date}`).then((r) => {
@@ -62,6 +63,10 @@ function DailyGrid() {
 
   if (!rows) return <Spinner />;
 
+  const presentList = rows.filter((r) => (marks[r.employee_id]?.status || 'present') === 'present');
+  const absentList = rows.filter((r) => (marks[r.employee_id]?.status) === 'absent');
+  const listRows = showList === 'present' ? presentList : showList === 'absent' ? absentList : [];
+
   return (
     <div>
       <div className="toolbar">
@@ -71,6 +76,45 @@ function DailyGrid() {
         {saved && <span style={{ color: '#2e7d32', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={2.2} /> Saved</span>}
         <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Attendance'}</button>
       </div>
+
+      <div className="btn-row" style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button
+          className="btn gray"
+          onClick={() => setShowList(showList === 'present' ? null : 'present')}
+          style={{ background: showList === 'present' ? '#2e7d32' : '#e6f4ea', color: showList === 'present' ? '#fff' : '#2e7d32', border: 'none' }}
+        >
+          Present <b style={{ marginLeft: 4 }}>{presentList.length}</b>
+        </button>
+        <button
+          className="btn gray"
+          onClick={() => setShowList(showList === 'absent' ? null : 'absent')}
+          style={{ background: showList === 'absent' ? '#c0392b' : '#fbeae8', color: showList === 'absent' ? '#fff' : '#c0392b', border: 'none' }}
+        >
+          Absent <b style={{ marginLeft: 4 }}>{absentList.length}</b>
+        </button>
+        <span style={{ fontSize: 12, color: '#6b7a72', alignSelf: 'center' }}>Tap a count to see the list</span>
+      </div>
+
+      {showList && (
+        <div className="panel" style={{ marginBottom: 12 }}>
+          <div className="panel-head">
+            <h3>{showList === 'present' ? 'Present' : 'Absent'} — {listRows.length}</h3>
+          </div>
+          <div className="panel-pad">
+            {listRows.length === 0 ? (
+              <p style={{ color: '#6b7a72', fontSize: 13, margin: 0 }}>No {showList} employees.</p>
+            ) : (
+              <ol style={{ margin: 0, paddingLeft: 20, columns: '2 220px' }}>
+                {listRows.map((r) => (
+                  <li key={r.employee_id} style={{ padding: '3px 0', fontSize: 13 }}>
+                    {r.name}{r.department ? <span style={{ color: '#6b7a72' }}> · {r.department}</span> : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      )}
       <div className="panel">
         <div className="table-wrap sticky-employee-table">
           <table className="data">

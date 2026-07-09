@@ -6,7 +6,7 @@ import {
   Users, CalendarCheck, Clock, Umbrella, ScrollText,
   Banknote, FileText, BarChart3, Landmark, AlertTriangle,
   FolderOpen, ClipboardList, Shirt, TrendingUp, DoorOpen,
-  Star, Trophy, PieChart,
+  Star, Trophy, PieChart, Search,
   LogOut, Menu, X,
 } from 'lucide-react';
 
@@ -26,6 +26,7 @@ const NAV = [
   { to: '/salary-report', label: 'Salary Report',     Icon: BarChart3,     group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/advances',      label: 'Advances & Loans',  Icon: Landmark,      group: 'Finance', roles: ['supervisor','admin','owner'] },
   { to: '/penalties',     label: 'Penalties & Fines', Icon: AlertTriangle,  group: 'Finance' },
+  { to: '/insights',      label: 'Insights',          Icon: Search,        group: 'Finance', roles: ['supervisor','admin','owner'] },
 
   { to: '/reviews',        label: 'Customer Reviews',  Icon: Star,    group: 'Feedback' },
   { to: '/leaderboard',    label: 'Leaderboard',       Icon: Trophy,  group: 'Feedback' },

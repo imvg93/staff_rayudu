@@ -112,6 +112,19 @@ router.post('/lock-all', requireRole('owner', 'admin', 'supervisor'), (req, res)
   res.json({ ok: true });
 });
 
+// Re-sync one employee's payroll for a month from current attendance/advances/penalties.
+// Used by the Leakage module to correct rows that drifted above a fresh recompute.
+router.post('/resync', requireRole('owner', 'admin', 'supervisor'), (req, res) => {
+  const { employee_id, month } = req.body;
+  if (!employee_id || !month) return res.status(400).json({ error: 'employee_id and month required' });
+  const existing = db.prepare('SELECT status FROM payroll WHERE employee_id = ? AND month = ?').get(employee_id, month);
+  if (existing?.status === 'locked') return res.status(403).json({ error: 'Payroll is locked — unlock before re-syncing' });
+  const fresh = compute(employee_id, month);
+  if (!fresh) return res.status(404).json({ error: 'Employee not found' });
+  upsertPayroll(fresh);
+  res.json(db.prepare('SELECT * FROM payroll WHERE employee_id = ? AND month = ?').get(employee_id, month));
+});
+
 // Salary history for one employee
 router.get('/history/:employeeId', (req, res) => {
   const rows = db.prepare(`

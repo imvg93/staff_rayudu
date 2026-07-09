@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../db.js';
+import { compute } from '../payrollEngine.js';
 
 const router = express.Router();
 const localDate = (d = new Date()) =>
@@ -299,6 +300,250 @@ router.get('/payroll-deductions', (req, res) => {
   }
 
   res.json(result);
+});
+
+// Hidden salary leakage — quantifiable money at risk or silently overpaid.
+// Read-only: computes buckets from advances, payroll and attendance.
+router.get('/leakage', (req, res) => {
+  const month = req.query.month || monthStr();
+
+  // 1. Advances still owed but with no monthly recovery set → never being clawed back
+  const unrecoveredAdvances = db.prepare(`
+    SELECT a.id, a.amount, a.balance, a.monthly_deduction, a.date, a.reason,
+           e.id AS employee_id, e.name, e.emp_code, e.department, e.status AS emp_status
+    FROM advances a JOIN employees e ON e.id = a.employee_id
+    WHERE a.balance > 0 AND COALESCE(a.monthly_deduction, 0) <= 0
+    ORDER BY a.balance DESC
+  `).all();
+
+  // 2. Outstanding advances owed by staff who have already exited
+  const exitedAdvances = db.prepare(`
+    SELECT a.id, a.amount, a.balance, a.monthly_deduction, a.date, a.reason,
+           e.id AS employee_id, e.name, e.emp_code, e.department, e.status AS emp_status
+    FROM advances a JOIN employees e ON e.id = a.employee_id
+    WHERE a.balance > 0 AND e.status = 'exited'
+    ORDER BY a.balance DESC
+  `).all();
+
+  // 3. Overtime pay for rest days the employee never took (extra_day_pay this month)
+  const restDayOvertime = db.prepare(`
+    SELECT p.employee_id, p.extra_off_days, p.extra_day_pay,
+           e.name, e.emp_code, e.department
+    FROM payroll p JOIN employees e ON e.id = p.employee_id
+    WHERE p.month = ? AND p.extra_day_pay > 0
+    ORDER BY p.extra_day_pay DESC
+  `).all(month);
+
+  // 4. Stored payroll that no longer matches a fresh recompute → possible overpayment
+  const storedRows = db.prepare(`
+    SELECT p.employee_id, p.net_salary, p.status,
+           e.name, e.emp_code, e.department
+    FROM payroll p JOIN employees e ON e.id = p.employee_id
+    WHERE p.month = ?
+  `).all(month);
+  const overpaidRows = [];
+  for (const row of storedRows) {
+    const fresh = compute(row.employee_id, month);
+    if (!fresh) continue;
+    const delta = Math.round(row.net_salary - fresh.net_salary);
+    if (delta > 0) {
+      overpaidRows.push({
+        employee_id: row.employee_id, name: row.name, emp_code: row.emp_code,
+        department: row.department, stored_net: Math.round(row.net_salary),
+        recomputed_net: fresh.net_salary, delta, status: row.status,
+      });
+    }
+  }
+  overpaidRows.sort((a, b) => b.delta - a.delta);
+
+  // 5. Full/near-full pay despite very low attendance this month
+  const lowAttendancePaid = db.prepare(`
+    SELECT p.employee_id, p.present_days, p.absent_days, p.half_days,
+           p.total_days_in_month, p.net_salary, e.name, e.emp_code, e.department
+    FROM payroll p JOIN employees e ON e.id = p.employee_id
+    WHERE p.month = ? AND p.net_salary > 0
+      AND p.present_days < (p.total_days_in_month * 0.3)
+    ORDER BY p.net_salary DESC
+  `).all(month);
+
+  // 6. Active, salaried staff with no attendance marked at all this month
+  const ghostNoAttendance = db.prepare(`
+    SELECT e.id AS employee_id, e.name, e.emp_code, e.department, e.salary
+    FROM employees e
+    WHERE e.status = 'active' AND e.salary > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM attendance a WHERE a.employee_id = e.id AND substr(a.date,1,7) = ?
+      )
+    ORDER BY e.salary DESC
+  `).all(month);
+
+  // 7. Data integrity: advance balance greater than the amount ever given
+  const advanceDataErrors = db.prepare(`
+    SELECT a.id, a.amount, a.balance, a.monthly_deduction, a.date, a.reason,
+           e.id AS employee_id, e.name, e.emp_code, e.department, e.status AS emp_status
+    FROM advances a JOIN employees e ON e.id = a.employee_id
+    WHERE a.balance > a.amount
+    ORDER BY (a.balance - a.amount) DESC
+  `).all();
+
+  const sum = (rows, key) => Math.round(rows.reduce((s, r) => s + (r[key] || 0), 0));
+
+  const buckets = [
+    {
+      key: 'unrecovered_advances', risk: true,
+      label: 'Unrecovered advances',
+      description: 'Advances still owed with no monthly deduction set — nothing is being clawed back.',
+      amount: sum(unrecoveredAdvances, 'balance'),
+      count: unrecoveredAdvances.length,
+      items: unrecoveredAdvances,
+    },
+    {
+      key: 'exited_advances', risk: true,
+      label: 'Advances owed by exited staff',
+      description: 'Employees who have left still carry an outstanding advance balance.',
+      amount: sum(exitedAdvances, 'balance'),
+      count: exitedAdvances.length,
+      items: exitedAdvances,
+    },
+    {
+      key: 'overpaid_payroll', risk: true,
+      label: 'Payroll higher than recompute',
+      description: 'Stored net salary exceeds a fresh calculation from current attendance & deductions.',
+      amount: sum(overpaidRows, 'delta'),
+      count: overpaidRows.length,
+      items: overpaidRows,
+    },
+    {
+      key: 'rest_day_overtime', risk: false,
+      label: 'Overtime for skipped rest days',
+      description: 'Extra pay because entitled weekly-offs were worked instead of rested. Real cost, but earned.',
+      amount: sum(restDayOvertime, 'extra_day_pay'),
+      count: restDayOvertime.length,
+      items: restDayOvertime,
+    },
+    {
+      key: 'low_attendance_paid', risk: false,
+      label: 'Paid despite low attendance',
+      description: 'Net salary paid while present on under 30% of the month — worth a manual check.',
+      amount: sum(lowAttendancePaid, 'net_salary'),
+      count: lowAttendancePaid.length,
+      items: lowAttendancePaid,
+    },
+    {
+      key: 'ghost_no_attendance', risk: false,
+      label: 'Active staff with no attendance marked',
+      description: 'On the payroll but not one day marked this month — an attendance gap that leads to full pay for no recorded work.',
+      amount: sum(ghostNoAttendance, 'salary'),
+      count: ghostNoAttendance.length,
+      items: ghostNoAttendance,
+    },
+    {
+      key: 'advance_data_error', risk: false,
+      label: 'Advance balance exceeds amount given',
+      description: 'Outstanding balance is larger than the advance ever issued — a tracking error inflating what is owed.',
+      amount: Math.round(advanceDataErrors.reduce((s, r) => s + (r.balance - r.amount), 0)),
+      count: advanceDataErrors.length,
+      items: advanceDataErrors,
+    },
+  ];
+
+  const totalAtRisk = buckets.filter((b) => b.risk).reduce((s, b) => s + b.amount, 0);
+
+  res.json({ month, totalAtRisk, buckets });
+});
+
+// Shift overload analyzer — who is being worked too hard, and where shifts are thin.
+// Read-only: scores each active employee on rest days skipped, work streaks,
+// total days worked and lateness, plus a department shift-staffing view.
+router.get('/overload', (req, res) => {
+  const month = req.query.month || monthStr();
+  const [y, m] = month.split('-').map(Number);
+  const totalDays = new Date(y, m, 0).getDate();
+
+  const emps = db.prepare(
+    "SELECT id, name, emp_code, department, shift, salary, monthly_allowed_holidays FROM employees WHERE status='active'"
+  ).all();
+
+  const attRows = db.prepare(
+    'SELECT employee_id, date, status, is_late FROM attendance WHERE substr(date,1,7) = ? ORDER BY employee_id, date'
+  ).all(month);
+  const byEmp = {};
+  for (const r of attRows) (byEmp[r.employee_id] ||= []).push(r);
+
+  // Longest run of consecutive calendar days actually worked (present/half_day).
+  const longestStreak = (dates) => {
+    if (!dates.length) return 0;
+    const days = [...new Set(dates.map((d) => Number(d.slice(8, 10))))].sort((a, b) => a - b);
+    let best = 1, cur = 1;
+    for (let i = 1; i < days.length; i++) {
+      if (days[i] === days[i - 1] + 1) { cur++; if (cur > best) best = cur; }
+      else cur = 1;
+    }
+    return best;
+  };
+
+  const employees = emps.map((e) => {
+    const rows = byEmp[e.id] || [];
+    let present = 0, half = 0, weeklyOff = 0, late = 0;
+    const workedDates = [];
+    for (const r of rows) {
+      if (r.status === 'present') { present++; workedDates.push(r.date); }
+      else if (r.status === 'half_day') { half++; workedDates.push(r.date); }
+      else if (r.status === 'weekly_off') weeklyOff++;
+      if (r.is_late) late++;
+    }
+    const daysWorked = present + half;
+    const allowed = e.monthly_allowed_holidays ?? 0;
+    const restSkipped = Math.max(0, allowed - weeklyOff);
+    const streak = longestStreak(workedDates);
+    const expectedWorkDays = Math.max(0, totalDays - allowed);
+    const extraDaysWorked = Math.max(0, daysWorked - expectedWorkDays);
+
+    // Transparent weighted score (0–100). Components returned so the UI can justify it.
+    const comp = {
+      rest: restSkipped * 12,
+      streak: Math.max(0, streak - 6) * 8,
+      extra: extraDaysWorked * 3,
+      late: late * 2,
+    };
+    const score = Math.min(100, Math.round(comp.rest + comp.streak + comp.extra + comp.late));
+    const level = score >= 50 ? 'high' : score >= 25 ? 'moderate' : score > 0 ? 'low' : 'ok';
+    const overtimeValue = Math.round((e.salary / totalDays) * restSkipped);
+
+    return {
+      employee_id: e.id, name: e.name, emp_code: e.emp_code, department: e.department, shift: e.shift,
+      present, half_day: half, weekly_off: weeklyOff, days_worked: daysWorked, allowed,
+      rest_skipped: restSkipped, longest_streak: streak, late, extra_days_worked: extraDaysWorked,
+      overtime_value: overtimeValue, score, level, components: comp,
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  // Department shift-staffing (based on each employee's fixed shift assignment).
+  const deptMap = {};
+  for (const e of emps) {
+    const d = e.department || '—';
+    deptMap[d] ||= { department: d, morning: 0, evening: 0, unassigned: 0, total: 0 };
+    deptMap[d].total++;
+    if (e.shift === 'morning') deptMap[d].morning++;
+    else if (e.shift === 'evening') deptMap[d].evening++;
+    else deptMap[d].unassigned++;
+  }
+  const departments = Object.values(deptMap).map((d) => ({
+    ...d,
+    // A shift is "thin" when a 2+ person team leaves one shift empty.
+    thin_shift: d.total >= 2 && (d.morning === 0 || d.evening === 0),
+    skew: d.total ? Math.round((Math.abs(d.morning - d.evening) / d.total) * 100) : 0,
+  })).sort((a, b) => b.skew - a.skew);
+
+  const summary = {
+    high: employees.filter((e) => e.level === 'high').length,
+    moderate: employees.filter((e) => e.level === 'moderate').length,
+    total_rest_skipped: employees.reduce((s, e) => s + e.rest_skipped, 0),
+    total_overtime_value: employees.reduce((s, e) => s + e.overtime_value, 0),
+    thin_departments: departments.filter((d) => d.thin_shift).length,
+  };
+
+  res.json({ month, totalDays, summary, employees, departments });
 });
 
 // Celebrations: birthdays & work anniversaries in next 30 days
